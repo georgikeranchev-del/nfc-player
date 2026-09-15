@@ -8,27 +8,46 @@
 // ==========================================
 // 1. ДЕФИНИЦИЯ НА ПИНОВЕ И НАСТРОЙКИ
 // ==========================================
-#define SD_CS          13
-#define PN532_CS        5
-#define MOTOR_PIN      27
 
-// I2S Аудио пинове за MAX98357A
-#define I2S_LRC        25
-#define I2S_BCLK       26
-#define I2S_DOUT       22
+// --- MicroSD Карта (HSPI Bus) ---
+#define SD_CS   13
+#define SD_SCK  14
+#define SD_MISO 16
+#define SD_MOSI 15
 
-// Ротационен енкодер KY-040
-#define ENCODER_CLK    32
-#define ENCODER_DT     33
-#define ENCODER_SW     34
+// --- PN532 NFC Четец ---
+#define PN532_SS   5
+#define PN532_SCK  18
+#define PN532_MISO 19
+#define PN532_MOSI 23
+
+// --- Мотор ---
+#define MOTOR_PIN 27
+
+// --- I2S Аудио пинове за MAX98357A ---
+#define I2S_LRC  25
+#define I2S_BCLK 26
+#define I2S_DOUT 22
+
+// --- Ротационен енкодер KY-040 ---
+#define ENCODER_CLK 32
+#define ENCODER_DT  33
+#define ENCODER_SW  4  // Сменено от 34 на 4 за ползване на вътрешен INPUT_PULLUP
 
 const int MAX_LOOPS = 3; // Максимален брой повторения преди Deep Sleep
 
 // ==========================================
 // 2. ИНИЦИАЛИЗАЦИЯ НА ОБЕКТИ И ПРОМЕНЛИВИ
 // ==========================================
-Adafruit_PN532 nfc(PN532_CS);
-Audio audio;
+
+// Независима SPI шина за SD картата
+SPIClass sdSPI(HSPI);
+
+// Software SPI за PN532 NFC (За да няма конфликт с SD картата)
+Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
+
+// Аудио обект
+Audio audio
 
 // Структура за връзка между NFC UID и MP3 файл
 struct TrackMap {
@@ -36,8 +55,7 @@ struct TrackMap {
   const char* filename;
 };
 
-// ТАБЛИЦА С ВАШИТЕ ТАГОВЕ И ПЕСНИ
-// Заменете примерните UID-и с тези от вашите стикери!
+// ТАБЛИЦА С ВАШИТЕ ТАГОВЕ И ПЕСНИ (Всички 50 песни)
 TrackMap playlist[] = {
   {"047D5D91E52A81", "/player/1.mp3"},   // Mariah Carey - All I Want for Christmas Is You
   {"04955D91E52A81", "/player/2.mp3"},   // Wham! - Last Christmas
@@ -104,12 +122,12 @@ int lastClkState;
 // ==========================================
 // 3. ПОМОЩНИ ФУНКЦИИ
 // ==========================================
-void startMotor() { 
-  digitalWrite(MOTOR_PIN, HIGH); 
+void startMotor() {
+  digitalWrite(MOTOR_PIN, HIGH);
 }
 
-void stopMotor() { 
-  digitalWrite(MOTOR_PIN, LOW); 
+void stopMotor() {
+  digitalWrite(MOTOR_PIN, LOW);
 }
 
 // Преминаване в дълбок сън при изчерпване на лимита
@@ -126,10 +144,10 @@ String readNFCUID() {
   uint8_t success;
   uint8_t uid[7];
   uint8_t uidLength;
-  
-  // Сканиране за таг (таймаут 100ms)
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 100);
-  
+
+  // Трайност на сканирането 50ms за да не насича аудиото
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 50);
+
   if (success) {
     String cardUID = "";
     for (uint8_t i = 0; i < uidLength; i++) {
@@ -160,8 +178,9 @@ void setup() {
   pinMode(ENCODER_SW, INPUT_PULLUP);
   lastClkState = digitalRead(ENCODER_CLK);
 
-  // 1. Инициализация на MicroSD картата
-  if (!SD.begin(SD_CS)) {
+  // 1. Инициализация на MicroSD картата през отделна HSPI шина
+  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if (!SD.begin(SD_CS, sdSPI)) {
     Serial.println("[ГРЕШКА] MicroSD картата не е намерена!");
   } else {
     Serial.println("[OK] MicroSD картата е намерена.");
@@ -177,7 +196,8 @@ void setup() {
   if (!versiondata) {
     Serial.println("[ГРЕШКА] PN532 NFC четецът не бе намерен!");
   } else {
-    nfc.SAMConfig();
+    nfc.SAMConfig(); // Настройка за четене
+    nfc.setPassiveActivationRetries(0x11); // Задължително за да не блокира при четене!
     Serial.println("[OK] PN532 NFC четецът е готов.");
   }
 }
@@ -195,7 +215,7 @@ void loop() {
     Serial.printf("[LOOP] Песента завърши (%d/%d повторения)\n", loopCount, MAX_LOOPS);
 
     if (loopCount < MAX_LOOPS) {
-      // Повторно пускане на същата песен
+      // Повторно пускане на същата песен (без sdSPI като 3-ти параметър!)
       audio.connecttoFS(SD, playingFile.c_str());
     } else {
       // Достигнат е лимитът -> Заспиване
@@ -216,9 +236,9 @@ void loop() {
   }
   lastClkState = currentClkState;
 
-  // Г. Периодично сканиране за NFC Таг (на всеки 250ms)
+  // Г. Периодично сканиране за NFC Таг (на всеки 300ms)
   static unsigned long lastNFCScan = 0;
-  if (millis() - lastNFCScan > 250) {
+  if (millis() - lastNFCScan > 300) {
     lastNFCScan = millis();
     String detectedUID = readNFCUID();
 
@@ -234,8 +254,9 @@ void loop() {
           
           Serial.println("[PLAY] Намерена плоча! Стартиране: " + playingFile);
           startMotor();
-          audio.connecttoFS(SD, playingFile.c_str());
-          isPlaying = true;
+          
+          // Старт на възпроизвеждането (коригирано за библиотеката)
+          isPlaying = audio.connecttoFS(SD, playingFile.c_str());
           trackFound = true;
           break;
         }
@@ -244,7 +265,7 @@ void loop() {
       if (!trackFound) {
         Serial.println("[WARN] Непознат NFC таг с UID: " + currentUID);
       }
-    } 
+    }
     // Случай 2: Плочата е премахната
     else if (detectedUID == "" && currentUID != "") {
       Serial.println("[STOP] Плочата е вдигната. Спиране на възпроизвеждането...");
