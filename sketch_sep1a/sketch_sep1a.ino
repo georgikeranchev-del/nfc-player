@@ -35,7 +35,7 @@
 // Енкодер
 #define ENCODER_CLK 32
 #define ENCODER_DT  33
-#define ENCODER_SW   4
+#define ENCODER_SW  4
 
 const uint8_t MAX_LOOPS = 3;
 
@@ -48,7 +48,7 @@ Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 AudioGeneratorMP3 *mp3 = nullptr;
 AudioFileSourceSD *file = nullptr;
-AudioOutputI2S *out = nullptr;
+AudioOutputI2S *out = nullptr; // Инициализира се веднъж в setup()
 
 // =============================
 // ПРОМЕНЛИВИ
@@ -77,29 +77,25 @@ void stopMotor() {
 }
 
 void stopPlayback() {
-
   if (mp3) {
-    mp3->stop();
+    if (mp3->isRunning()) mp3->stop();
     delete mp3;
     mp3 = nullptr;
   }
 
   if (file) {
+    file->close();
     delete file;
     file = nullptr;
   }
 
   stopMotor();
-
   isPlaying = false;
 }
 
 void enterDeepSleep() {
-
   Serial.println("[SLEEP] Deep Sleep");
-
   stopPlayback();
-
   delay(200);
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)ENCODER_SW, 0);
@@ -107,56 +103,39 @@ void enterDeepSleep() {
 }
 
 bool readNFCUID(char *uidString) {
-
   uint8_t uid[7];
   uint8_t uidLength;
 
-  if (!nfc.readPassiveTargetID(
-        PN532_MIFARE_ISO14443A,
-        uid,
-        &uidLength,
-        50))
+  if (!nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 50))
     return false;
 
   char *p = uidString;
-
   for (uint8_t i = 0; i < uidLength; i++) {
     sprintf(p, "%02X", uid[i]);
     p += 2;
   }
-
   *p = '\0';
 
   return true;
 }
 
 void playTrack(const char *path) {
-
   stopPlayback();
 
   strcpy(playingFile, path);
 
   startMotor();
-  delay(500);                 // реалистично развъртане
+  delay(300); // Плавно стартиране
 
   file = new AudioFileSourceSD(path);
-
-  out = new AudioOutputI2S();
-  out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  out->SetGain(volume / 21.0f);
-
   mp3 = new AudioGeneratorMP3();
 
   if (mp3->begin(file, out)) {
-
     isPlaying = true;
     loopCount = 0;
-
     Serial.print("[PLAY] ");
     Serial.println(path);
-
   } else {
-
     Serial.println("[ERROR] MP3 start failed");
     stopPlayback();
   }
@@ -167,7 +146,6 @@ void playTrack(const char *path) {
 // =============================
 
 void setup() {
-
   Serial.begin(115200);
   delay(500);
 
@@ -182,30 +160,27 @@ void setup() {
 
   lastClkState = digitalRead(ENCODER_CLK);
 
-  // SD
-
+  // SD Карта
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-
   if (!SD.begin(SD_CS, sdSPI))
     Serial.println("[ERROR] SD");
   else
     Serial.println("[OK] SD");
 
-  // NFC
-
+  // NFC Четей
   nfc.begin();
-
   if (!nfc.getFirmwareVersion()) {
-
     Serial.println("[ERROR] PN532");
-
   } else {
-
     nfc.SAMConfig();
     nfc.setPassiveActivationRetries(0x11);
-
     Serial.println("[OK] PN532");
   }
+
+  // Аудио Изход (Еднократна инициализация за избягване на течове)
+  out = new AudioOutputI2S();
+  out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  out->SetGain(volume / 21.0f);
 }
 
 // =============================
@@ -214,37 +189,27 @@ void setup() {
 
 void loop() {
 
-  // MP3
-
+  // 1. MP3 Декодиране (ТРЯБВА ДА СЕ ИЗПЪЛНЯВА ПОСТОЯННО)
   if (isPlaying && mp3) {
-
     if (mp3->isRunning()) {
-
-      mp3->loop();
-
+      if (!mp3->loop()) {
+        mp3->stop();
+      }
     } else {
-
       loopCount++;
-
       Serial.printf("[LOOP] %d/%d\n", loopCount, MAX_LOOPS);
 
       if (loopCount < MAX_LOOPS) {
-
         playTrack(playingFile);
-
       } else {
-
         enterDeepSleep();
       }
     }
   }
 
-  // Енкодер
-
+  // 2. Ротационен Енкодер (Сила на звука)
   int clk = digitalRead(ENCODER_CLK);
-
   if (clk != lastClkState && clk == LOW) {
-
     if (digitalRead(ENCODER_DT) != clk)
       volume = min((uint8_t)21, (uint8_t)(volume + 1));
     else
@@ -255,60 +220,42 @@ void loop() {
 
     Serial.printf("[VOL] %d\n", volume);
   }
-
   lastClkState = clk;
 
-  // NFC
-
+  // 3. NFC Скениране (Без да спира mp3->loop())
   static uint32_t lastScan = 0;
+  if (millis() - lastScan >= 250) {
+    lastScan = millis();
 
-  if (millis() - lastScan < 250)
-    return;
+    char detectedUID[15];
 
-  lastScan = millis();
-
-  char detectedUID[15];
-
-  if (readNFCUID(detectedUID)) {
-
-    missingReads = 0;
-
-    if (strcmp(detectedUID, currentUID) != 0) {
-
-      strcpy(currentUID, detectedUID);
-
-      char filename[40];
-
-      snprintf(
-        filename,
-        sizeof(filename),
-        "/player/%s.mp3",
-        currentUID);
-
-      if (SD.exists(filename)) {
-
-        playTrack(filename);
-
-      } else {
-
-        Serial.print("[NOT FOUND] ");
-        Serial.println(filename);
-      }
-    }
-
-  } else {
-
-    if (++missingReads >= 3 && currentUID[0]) {
-
-      Serial.println("[STOP] Record removed");
-
-      stopPlayback();
-
-      currentUID[0] = '\0';
-      playingFile[0] = '\0';
-
-      loopCount = 0;
+    if (readNFCUID(detectedUID)) {
       missingReads = 0;
+
+      if (strcmp(detectedUID, currentUID) != 0) {
+        strcpy(currentUID, detectedUID);
+
+        char filename[40];
+        snprintf(filename, sizeof(filename), "/player/%s.mp3", currentUID);
+
+        if (SD.exists(filename)) {
+          playTrack(filename);
+        } else {
+          Serial.print("[NOT FOUND] ");
+          Serial.println(filename);
+        }
+      }
+    } else {
+      if (++missingReads >= 3 && currentUID[0]) {
+        Serial.println("[STOP] Record removed");
+
+        stopPlayback();
+
+        currentUID[0] = '\0';
+        playingFile[0] = '\0';
+        loopCount = 0;
+        missingReads = 0;
+      }
     }
   }
 }
