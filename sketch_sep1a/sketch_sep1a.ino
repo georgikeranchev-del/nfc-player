@@ -2,7 +2,6 @@
 #include <SPI.h>
 #include <SD.h>
 #include <FS.h>
-
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
 
@@ -11,136 +10,117 @@
 #include "AudioGeneratorMP3.h"
 #include "AudioOutputI2S.h"
 
-
 // ============================================================
-// PINOUT
+// PINS
 // ============================================================
 
-// SD card - HSPI
 #define SD_CS       13
 #define SD_SCK      14
 #define SD_MISO     16
 #define SD_MOSI     15
 
-// PN532 - Software SPI
 #define PN532_SS    5
 #define PN532_SCK   18
 #define PN532_MISO  19
 #define PN532_MOSI  23
 
-// DC Motor
 #define MOTOR_PIN   27
 
-// MAX98357A
 #define I2S_LRC     25
 #define I2S_BCLK    26
 #define I2S_DOUT    22
 
-// Rotary Encoder
 #define ENCODER_CLK 32
 #define ENCODER_DT  33
 #define ENCODER_SW  4
 
-// WS2812B LED ring
 #define LED_PIN     21
 #define NUM_LEDS    24
-
 
 // ============================================================
 // SETTINGS
 // ============================================================
 
 const uint8_t MAX_LOOPS = 3;
-
-// SD speed
 const uint32_t SD_SPEED = 10000000;
-
-// AudioFileSourceBuffer size
 const size_t AUDIO_BUFFER_SIZE = 8192;
 
-// NFC scan intervals
-const uint32_t NFC_SCAN_IDLE    = 150;
+const uint32_t NFC_SCAN_IDLE = 150;
 const uint32_t NFC_SCAN_PLAYING = 200;
-
-// Number of consecutive failed NFC reads
-// before we consider the tag removed.
 const uint8_t NFC_MISSING_LIMIT = 2;
 
-// Initial volume
 const uint8_t INITIAL_VOLUME = 12;
-
-// Volume limits
 const uint8_t MIN_VOLUME = 0;
 const uint8_t MAX_VOLUME = 21;
 
-// LED brightness
+// ============================================================
+// LED SETTINGS
+// ============================================================
+
 const uint8_t LED_BRIGHTNESS = 120;
+const uint16_t LED_UPDATE_INTERVAL = 20;
 
-
-// ============================================================
-// OBJECTS
-// ============================================================
-
-// Separate SPI bus for SD
-SPIClass sdSPI(HSPI);
-
-// PN532 software SPI
-Adafruit_PN532 nfc(
-  PN532_SCK,
-  PN532_MISO,
-  PN532_MOSI,
-  PN532_SS
-);
-
-// Audio objects
-AudioGeneratorMP3 *mp3 = nullptr;
-AudioFileSourceSD *file = nullptr;
-AudioFileSourceBuffer *audioBuffer = nullptr;
-AudioOutputI2S *out = nullptr;
-
-// WS2812B
 CRGB leds[NUM_LEDS];
 
-
 // ============================================================
-// GLOBAL VARIABLES
-// ============================================================
-
-char currentUID[15] = "";
-char playingFile[40] = "";
-
-volatile bool isPlaying = false;
-
-uint8_t loopCount = 0;
-uint8_t volume = INITIAL_VOLUME;
-
-int lastClkState = HIGH;
-
-
-// ============================================================
-// NFC TASK VARIABLES
+// LED PATTERNS
 // ============================================================
 
-volatile bool nfcTaskRunning = true;
-
-volatile bool nfcTagDetected = false;
-volatile bool nfcTagRemoved = false;
-
-char nfcUID[15] = "";
-
-uint8_t missingReads = 0;
-
-TaskHandle_t nfcTaskHandle = nullptr;
-
-SemaphoreHandle_t nfcMutex = nullptr;
-
+enum LEDPattern {
+  PATTERN_VINYL_RUNNER,
+  PATTERN_COMET,
+  PATTERN_DUAL_ORBIT,
+  PATTERN_ROTATING_PULSE,
+  PATTERN_COMET_SPARKLES,
+  PATTERN_BREATHING_ORBIT,
+  PATTERN_EXPANDING_RING,
+  PATTERN_TWO_COLOR_CHASE,
+  PATTERN_CENTERED_COMET,
+  PATTERN_RANDOM_FIREFLIES,
+  PATTERN_WAVE_AROUND_VINYL,
+  PATTERN_HEARTBEAT_ORBIT,
+  PATTERN_COUNT
+};
 
 // ============================================================
-// LED VARIABLES
+// PATTERN NAMES
 // ============================================================
 
-enum LEDMode
-{
+const char* patternNames[PATTERN_COUNT] = {
+  "Vinyl Runner",
+  "Comet",
+  "Dual Orbit",
+  "Rotating Pulse",
+  "Comet + Sparkles",
+  "Breathing Orbit",
+  "Expanding Ring",
+  "Two Color Chase",
+  "Centered Comet",
+  "Random Fireflies",
+  "Wave Around Vinyl",
+  "Heartbeat Orbit"
+};
+
+// ============================================================
+// ACTIVE RANDOM PATTERNS
+// ============================================================
+
+const LEDPattern activePatterns[] = {
+  PATTERN_VINYL_RUNNER,
+  PATTERN_COMET,
+  PATTERN_DUAL_ORBIT,
+  PATTERN_ROTATING_PULSE,
+  PATTERN_COMET_SPARKLES,
+  PATTERN_BREATHING_ORBIT
+};
+
+const uint8_t NUM_ACTIVE_PATTERNS = sizeof(activePatterns) / sizeof(activePatterns[0]);
+
+// ============================================================
+// LED STATE
+// ============================================================
+
+enum LEDMode {
   LED_STANDBY,
   LED_STARTING,
   LED_PLAYING,
@@ -149,1564 +129,658 @@ enum LEDMode
 };
 
 LEDMode ledMode = LED_STANDBY;
+LEDPattern currentPattern = PATTERN_VINYL_RUNNER;
+LEDPattern lastPattern = PATTERN_COUNT;
 
 uint32_t ledModeStart = 0;
 uint32_t lastLEDUpdate = 0;
-
-
-// ============================================================
-// FUNCTION DECLARATIONS
-// ============================================================
-
-void stopPlayback();
-
-bool readNFCUID(char *uid, size_t uidSize);
-
-bool playTrack(const char *filename);
-
-void nfcTask(void *parameter);
-
-void enterDeepSleep();
-
-void handleEncoder();
-
-void setLEDMode(LEDMode mode);
-
-void updateLEDs();
-
-void clearLEDs();
-
+uint32_t patternStartTime = 0;
+uint16_t ledFrame = 0;
 
 // ============================================================
-// LED MODE
+// HARDWARE OBJECTS
 // ============================================================
 
-void setLEDMode(LEDMode mode)
-{
+SPIClass sdSPI(HSPI);
+Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
+
+AudioGeneratorMP3 *mp3 = nullptr;
+AudioFileSourceSD *file = nullptr;
+AudioFileSourceBuffer *audioBuffer = nullptr;
+AudioOutputI2S *out = nullptr;
+
+// ============================================================
+// GLOBALS
+// ============================================================
+
+char currentUID[15] = "";
+char playingFile[40] = "";
+volatile bool isPlaying = false;
+uint8_t loopCount = 0;
+uint8_t volume = INITIAL_VOLUME;
+int lastClkState = HIGH;
+
+// ============================================================
+// NFC TASK GLOBALS
+// ============================================================
+
+volatile bool nfcTaskRunning = true;
+volatile bool nfcTagDetected = false;
+volatile bool nfcTagRemoved = false;
+char nfcUID[15] = "";
+uint8_t missingReads = 0;
+
+TaskHandle_t nfcTaskHandle = nullptr;
+SemaphoreHandle_t nfcMutex = nullptr;
+
+// ============================================================
+// LED HELPERS
+// ============================================================
+
+void clearLEDs() {
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.show();
+}
+
+void setLEDMode(LEDMode mode) {
   ledMode = mode;
   ledModeStart = millis();
-}
 
+  if (mode == LED_PLAYING) {
+    patternStartTime = millis();
+    ledFrame = 0;
+  }
 
-// ============================================================
-// CLEAR LEDS
-// ============================================================
-
-void clearLEDs()
-{
-  fill_solid(
-    leds,
-    NUM_LEDS,
-    CRGB::Black
-  );
-
-  FastLED.show();
-}
-
-
-// ============================================================
-// LED - STANDBY
-//
-// Slow breathing effect.
-// ============================================================
-
-void updateLEDStandby()
-{
-  uint8_t brightness = beatsin8(
-    10,
-    5,
-    35
-  );
-
-  fill_solid(
-    leds,
-    NUM_LEDS,
-    CRGB(
-      brightness,
-      brightness,
-      brightness
-    )
-  );
-}
-
-
-// ============================================================
-// LED - STARTING
-//
-// One light travels around the ring.
-// ============================================================
-
-void updateLEDStarting()
-{
-  uint32_t elapsed =
-    millis() - ledModeStart;
-
-  uint8_t position =
-    (elapsed / 35) % NUM_LEDS;
-
-  fadeToBlackBy(
-    leds,
-    NUM_LEDS,
-    45
-  );
-
-  leds[position] =
-    CRGB::White;
-
-  leds[
-    (position + NUM_LEDS - 1) % NUM_LEDS
-  ] = CRGB(80, 80, 80);
-
-  leds[
-    (position + NUM_LEDS - 2) % NUM_LEDS
-  ] = CRGB(30, 30, 30);
-}
-
-
-// ============================================================
-// LED - PLAYING
-//
-// Rotating pulse around the ring.
-// ============================================================
-
-void updateLEDPlaying()
-{
-  fadeToBlackBy(
-    leds,
-    NUM_LEDS,
-    35
-  );
-
-  uint8_t position =
-    (millis() / 55) % NUM_LEDS;
-
-  leds[position] =
-    CRGB::White;
-
-  leds[
-    (position + NUM_LEDS - 1) % NUM_LEDS
-  ] = CRGB(90, 90, 90);
-
-  leds[
-    (position + NUM_LEDS - 2) % NUM_LEDS
-  ] = CRGB(35, 35, 35);
-
-  // Very subtle overall pulse
-  uint8_t pulse =
-    beatsin8(
-      12,
-      0,
-      18
-    );
-
-  if (pulse > 0)
-  {
-    for (uint8_t i = 0; i < NUM_LEDS; i++)
-    {
-      leds[i].nscale8(
-        255 - pulse
-      );
-    }
+  if (mode == LED_STARTING || mode == LED_LOOP) {
+    ledFrame = 0;
   }
 }
 
+void selectRandomPattern() {
+  if (NUM_ACTIVE_PATTERNS == 0) {
+    currentPattern = PATTERN_VINYL_RUNNER;
+    return;
+  }
+
+  if (NUM_ACTIVE_PATTERNS == 1) {
+    currentPattern = activePatterns[0];
+    return;
+  }
+
+  LEDPattern newPattern;
+  do {
+    uint32_t r = esp_random();
+    newPattern = activePatterns[r % NUM_ACTIVE_PATTERNS];
+  } while (newPattern == lastPattern);
+
+  lastPattern = newPattern;
+  currentPattern = newPattern;
+
+  Serial.print("LED pattern: ");
+  Serial.println(patternNames[currentPattern]);
+}
 
 // ============================================================
-// LED - LOOP
-//
-// Short flash when a track starts another loop.
+// LED PATTERNS IMPLEMENTATIONS
 // ============================================================
 
-void updateLEDLoop()
-{
-  uint32_t elapsed =
-    millis() - ledModeStart;
+void updateVinylRunner() {
+  fadeToBlackBy(leds, NUM_LEDS, 35);
+  uint16_t pos = (millis() / 70) % NUM_LEDS;
+
+  leds[pos] += CRGB(120, 180, 255);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(50, 80, 120);
+  leds[(pos + NUM_LEDS - 2) % NUM_LEDS] += CRGB(20, 35, 60);
+}
+
+void updateComet() {
+  fadeToBlackBy(leds, NUM_LEDS, 50);
+  uint16_t pos = (millis() / 55) % NUM_LEDS;
+
+  leds[pos] = CRGB(180, 220, 255);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(100, 130, 180);
+  leds[(pos + NUM_LEDS - 2) % NUM_LEDS] += CRGB(45, 60, 100);
+  leds[(pos + NUM_LEDS - 3) % NUM_LEDS] += CRGB(15, 20, 40);
+}
+
+void updateDualOrbit() {
+  fadeToBlackBy(leds, NUM_LEDS, 42);
+  uint16_t pos = (millis() / 70) % NUM_LEDS;
+  uint16_t opposite = (pos + NUM_LEDS / 2) % NUM_LEDS;
+
+  leds[pos] = CRGB(120, 200, 255);
+  leds[opposite] = CRGB(255, 100, 180);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(50, 80, 120);
+  leds[(opposite + 1) % NUM_LEDS] += CRGB(100, 40, 80);
+}
+
+void updateRotatingPulse() {
+  uint8_t wave = beatsin8(18, 35, 150);
+  fill_solid(leds, NUM_LEDS, CRGB(wave / 2, wave, 255));
+
+  uint16_t pos = (millis() / 90) % NUM_LEDS;
+  leds[pos] = CRGB::White;
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] = CRGB(120, 180, 220);
+}
+
+void updateCometSparkles() {
+  fadeToBlackBy(leds, NUM_LEDS, 45);
+  uint16_t pos = (millis() / 60) % NUM_LEDS;
+
+  leds[pos] = CRGB(180, 230, 255);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(90, 130, 180);
+  leds[(pos + NUM_LEDS - 2) % NUM_LEDS] += CRGB(40, 60, 90);
+
+  if (random8() < 35) {
+    uint8_t spark = random8(NUM_LEDS);
+    leds[spark] += CRGB(180, 180, 255);
+  }
+}
+
+void updateBreathingOrbit() {
+  fadeToBlackBy(leds, NUM_LEDS, 20);
+  uint8_t brightness = beatsin8(12, 35, 180);
+  uint16_t pos = (millis() / 95) % NUM_LEDS;
+
+  leds[pos] = CRGB(brightness / 2, brightness, brightness);
+  leds[(pos + 1) % NUM_LEDS] += CRGB(20, 40, 50);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(20, 40, 50);
+}
+
+void updateExpandingRing() {
+  fadeToBlackBy(leds, NUM_LEDS, 55);
+  uint16_t phase = (millis() / 120) % NUM_LEDS;
+  uint16_t center = 0;
+
+  uint16_t a = (center + phase) % NUM_LEDS;
+  uint16_t b = (center + NUM_LEDS - phase) % NUM_LEDS;
+
+  leds[a] += CRGB(120, 180, 255);
+  leds[b] += CRGB(120, 180, 255);
+}
+
+void updateTwoColorChase() {
+  fadeToBlackBy(leds, NUM_LEDS, 38);
+  uint16_t pos = (millis() / 80) % NUM_LEDS;
+  uint16_t pos2 = (pos + NUM_LEDS / 2) % NUM_LEDS;
+
+  leds[pos] = CRGB(255, 80, 120);
+  leds[pos2] = CRGB(80, 160, 255);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(100, 30, 50);
+  leds[(pos2 + NUM_LEDS - 1) % NUM_LEDS] += CRGB(30, 60, 100);
+}
+
+void updateCenteredComet() {
+  fadeToBlackBy(leds, NUM_LEDS, 42);
+  uint16_t center = (millis() / 70) % NUM_LEDS;
+
+  leds[center] = CRGB(220, 240, 255);
+  leds[(center + 1) % NUM_LEDS] += CRGB(100, 150, 200);
+  leds[(center + NUM_LEDS - 1) % NUM_LEDS] += CRGB(100, 150, 200);
+  leds[(center + 2) % NUM_LEDS] += CRGB(40, 70, 100);
+  leds[(center + NUM_LEDS - 2) % NUM_LEDS] += CRGB(40, 70, 100);
+}
+
+void updateRandomFireflies() {
+  fadeToBlackBy(leds, NUM_LEDS, 25);
+
+  if (random8() < 70) {
+    uint8_t pos = random8(NUM_LEDS);
+    leds[pos] += CRGB(random8(60, 150), random8(80, 180), 255);
+  }
+}
+
+void updateWaveAroundVinyl() {
+  uint16_t t = millis() / 18;
+
+  for (uint8_t i = 0; i < NUM_LEDS; i++) {
+    uint8_t wave = sin8((i * 255 / NUM_LEDS) + t);
+    uint8_t brightness = scale8(wave, 150);
+    leds[i] = CRGB(brightness / 3, brightness, brightness);
+  }
+}
+
+void updateHeartbeatOrbit() {
+  fadeToBlackBy(leds, NUM_LEDS, 35);
+  uint16_t pos = (millis() / 90) % NUM_LEDS;
+  uint8_t pulse = beatsin8(28, 50, 220);
+
+  leds[pos] = CRGB(pulse, pulse / 3, pulse / 2);
+  leds[(pos + NUM_LEDS - 1) % NUM_LEDS] += CRGB(pulse / 3, pulse / 8, pulse / 6);
+}
+
+// ============================================================
+// UPDATE ACTIVE PLAYING PATTERN
+// ============================================================
+
+void updatePlayingPattern() {
+  switch (currentPattern) {
+    case PATTERN_VINYL_RUNNER:     updateVinylRunner(); break;
+    case PATTERN_COMET:            updateComet(); break;
+    case PATTERN_DUAL_ORBIT:        updateDualOrbit(); break;
+    case PATTERN_ROTATING_PULSE:   updateRotatingPulse(); break;
+    case PATTERN_COMET_SPARKLES:   updateCometSparkles(); break;
+    case PATTERN_BREATHING_ORBIT:  updateBreathingOrbit(); break;
+    case PATTERN_EXPANDING_RING:   updateExpandingRing(); break;
+    case PATTERN_TWO_COLOR_CHASE:  updateTwoColorChase(); break;
+    case PATTERN_CENTERED_COMET:   updateCenteredComet(); break;
+    case PATTERN_RANDOM_FIREFLIES: updateRandomFireflies(); break;
+    case PATTERN_WAVE_AROUND_VINYL:updateWaveAroundVinyl(); break;
+    case PATTERN_HEARTBEAT_ORBIT:  updateHeartbeatOrbit(); break;
+    default:                       updateVinylRunner(); break;
+  }
+}
+
+// ============================================================
+// LED MODES
+// ============================================================
+
+void updateLEDStandby() {
+  uint8_t brightness = beatsin8(8, 5, 28);
+  fill_solid(leds, NUM_LEDS, CRGB(brightness / 3, brightness / 2, brightness));
+}
+
+void updateLEDStarting() {
+  uint32_t elapsed = millis() - ledModeStart;
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+
+  uint8_t count = map(min(elapsed, (uint32_t)1000), 0, 1000, 0, NUM_LEDS);
+
+  for (uint8_t i = 0; i < count; i++) {
+    uint8_t brightness = map(i, 0, max((uint8_t)1, count), 60, 255);
+    leds[i] = CRGB(brightness / 2, brightness, 255);
+  }
+
+  if (elapsed >= 1000) {
+    setLEDMode(LED_PLAYING);
+  }
+}
+
+void updateLEDLoop() {
+  uint32_t elapsed = millis() - ledModeStart;
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
 
   uint8_t brightness = 0;
+  if (elapsed < 150) {
+    brightness = 255;
+  } else if (elapsed < 400) {
+    brightness = map(elapsed, 150, 400, 255, 0);
+  }
 
-  if (elapsed < 250)
-  {
-    brightness =
-      map(
-        elapsed,
-        0,
-        250,
-        0,
-        255
-      );
+  if (brightness > 0) {
+    fill_solid(leds, NUM_LEDS, CRGB(brightness, brightness / 2, 20));
   }
-  else if (elapsed < 500)
-  {
-    brightness =
-      map(
-        elapsed,
-        250,
-        500,
-        255,
-        0
-      );
-  }
-  else
-  {
+
+  if (elapsed >= 400) {
     setLEDMode(LED_PLAYING);
-    return;
-  }
-
-  fill_solid(
-    leds,
-    NUM_LEDS,
-    CRGB(
-      brightness,
-      brightness,
-      brightness
-    )
-  );
-}
-
-
-// ============================================================
-// LED - STOPPING
-//
-// Quick fade out.
-// ============================================================
-
-void updateLEDStopping()
-{
-  uint32_t elapsed =
-    millis() - ledModeStart;
-
-  if (elapsed < 350)
-  {
-    uint8_t brightness =
-      map(
-        elapsed,
-        0,
-        350,
-        255,
-        0
-      );
-
-    fill_solid(
-      leds,
-      NUM_LEDS,
-      CRGB(
-        brightness,
-        brightness,
-        brightness
-      )
-    );
-  }
-  else
-  {
-    setLEDMode(LED_STANDBY);
   }
 }
 
+void updateLEDStopping() {
+  uint32_t elapsed = millis() - ledModeStart;
 
-// ============================================================
-// UPDATE LEDS
-//
-// Non-blocking.
-// Called from main loop.
-// ============================================================
+  if (elapsed < 500) {
+    uint8_t brightness = map(elapsed, 0, 500, 255, 0);
+    for (uint8_t i = 0; i < NUM_LEDS; i++) {
+      leds[i].nscale8(brightness);
+    }
+  } else {
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+  }
+}
 
-void updateLEDs()
-{
+void updateLEDs() {
   uint32_t now = millis();
-
-  // Update approximately every 20 ms
-  if (
-    now - lastLEDUpdate < 20
-  )
-  {
+  if (now - lastLEDUpdate < LED_UPDATE_INTERVAL) {
     return;
   }
-
   lastLEDUpdate = now;
 
-
-  switch (ledMode)
-  {
-    case LED_STANDBY:
-      updateLEDStandby();
-      break;
-
-    case LED_STARTING:
-      updateLEDStarting();
-      break;
-
-    case LED_PLAYING:
-      updateLEDPlaying();
-      break;
-
-    case LED_LOOP:
-      updateLEDLoop();
-      break;
-
-    case LED_STOPPING:
-      updateLEDStopping();
-      break;
+  switch (ledMode) {
+    case LED_STANDBY:  updateLEDStandby(); break;
+    case LED_STARTING: updateLEDStarting(); break;
+    case LED_PLAYING:  updatePlayingPattern(); break;
+    case LED_LOOP:     updateLEDLoop(); break;
+    case LED_STOPPING: updateLEDStopping(); break;
   }
 
-
   FastLED.show();
+  ledFrame++;
 }
 
-
 // ============================================================
-// STOP PLAYBACK
+// SYSTEM CONTROLS
 // ============================================================
 
-void stopPlayback()
-{
-  Serial.println();
+void stopPlayback() {
   Serial.println("Stopping playback...");
 
-  // Stop MP3 decoder
-  if (mp3 != nullptr)
-  {
-    if (mp3->isRunning())
-    {
+  if (mp3 != nullptr) {
+    if (mp3->isRunning()) {
       mp3->stop();
     }
-
     delete mp3;
     mp3 = nullptr;
   }
 
-  // Delete audio buffer
-  if (audioBuffer != nullptr)
-  {
+  if (audioBuffer != nullptr) {
     delete audioBuffer;
     audioBuffer = nullptr;
   }
 
-  // Close/delete file
-  if (file != nullptr)
-  {
+  if (file != nullptr) {
     file->close();
-
     delete file;
     file = nullptr;
   }
 
-  // Stop motor
-  digitalWrite(
-    MOTOR_PIN,
-    LOW
-  );
-
+  digitalWrite(MOTOR_PIN, LOW);
   isPlaying = false;
-
   Serial.println("Playback stopped.");
 }
 
-
-// ============================================================
-// DEEP SLEEP
-// ============================================================
-
-void enterDeepSleep()
-{
-  Serial.println();
-  Serial.println("================================");
-  Serial.println("Playback finished.");
-  Serial.println("Entering deep sleep...");
-  Serial.println("Press encoder button to wake.");
-  Serial.println("================================");
-
+void enterDeepSleep() {
+  Serial.println("Playback finished. Entering deep sleep...");
   clearLEDs();
-
   delay(200);
 
-  // Wake when encoder switch is pressed
-  esp_sleep_enable_ext0_wakeup(
-    (gpio_num_t)ENCODER_SW,
-    0
-  );
-
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)ENCODER_SW, 0);
   esp_deep_sleep_start();
 }
 
-
-// ============================================================
-// READ NFC UID
-// ============================================================
-
-bool readNFCUID(
-  char *uid,
-  size_t uidSize
-)
-{
+bool readNFCUID(char *uid, size_t uidSize) {
   uint8_t uidBuffer[10];
   uint8_t uidLength = 0;
 
-  bool success =
-    nfc.readPassiveTargetID(
-      PN532_MIFARE_ISO14443A,
-      uidBuffer,
-      &uidLength,
-      50
-    );
+  bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uidBuffer, &uidLength, 50);
 
-  if (!success)
-  {
+  if (!success || uidLength == 0 || uidLength > 7) {
     return false;
   }
 
-  if (
-    uidLength == 0 ||
-    uidLength > 7
-  )
-  {
-    return false;
-  }
-
-  // Convert UID to uppercase HEX string
   size_t pos = 0;
-
-  for (
-    uint8_t i = 0;
-    i < uidLength;
-    i++
-  )
-  {
-    if (
-      pos + 2 >= uidSize
-    )
-    {
-      return false;
-    }
-
-    sprintf(
-      &uid[pos],
-      "%02X",
-      uidBuffer[i]
-    );
-
-    pos += 2;
+  for (uint8_t i = 0; i < uidLength && pos + 2 < uidSize; i++) {
+    pos += snprintf(uid + pos, uidSize - pos, "%02X", uidBuffer[i]);
   }
-
   uid[pos] = '\0';
 
   return true;
 }
 
-
-// ============================================================
-// PLAY TRACK
-// ============================================================
-
-bool playTrack(
-  const char *filename
-)
-{
-  Serial.println();
-  Serial.println("================================");
-  Serial.print("Starting track: ");
+bool playTrack(const char *filename) {
+  Serial.print("Starting playback: ");
   Serial.println(filename);
-  Serial.println("================================");
 
-  // Stop anything currently playing
   stopPlayback();
 
-  strncpy(
-    playingFile,
-    filename,
-    sizeof(playingFile) - 1
-  );
+  strncpy(playingFile, filename, sizeof(playingFile) - 1);
+  playingFile[sizeof(playingFile) - 1] = '\0';
 
-  playingFile[
-    sizeof(playingFile) - 1
-  ] = '\0';
-
-
-  // Check file exists
-  if (!SD.exists(playingFile))
-  {
-    Serial.print(
-      "ERROR: File not found: "
-    );
-
-    Serial.println(
-      playingFile
-    );
-
+  if (!SD.exists(playingFile)) {
+    Serial.print("File not found: ");
+    Serial.println(playingFile);
     return false;
   }
 
-
-  // ----------------------------------------------------------
-  // Start motor
-  // ----------------------------------------------------------
-
-  digitalWrite(
-    MOTOR_PIN,
-    HIGH
-  );
-
-  // Give platter a little time to start rotating
+  digitalWrite(MOTOR_PIN, HIGH);
   delay(300);
 
+  file = new AudioFileSourceSD(playingFile);
+  audioBuffer = new AudioFileSourceBuffer(file, AUDIO_BUFFER_SIZE);
+  mp3 = new AudioGeneratorMP3();
 
-  // ----------------------------------------------------------
-  // LED starting animation
-  // ----------------------------------------------------------
-
-  setLEDMode(
-    LED_STARTING
-  );
-
-
-  // ----------------------------------------------------------
-  // Open MP3 file
-  // ----------------------------------------------------------
-
-  file =
-    new AudioFileSourceSD(
-      playingFile
-    );
-
-  if (file == nullptr)
-  {
-    Serial.println(
-      "ERROR: Cannot allocate AudioFileSourceSD."
-    );
-
-    digitalWrite(
-      MOTOR_PIN,
-      LOW
-    );
-
+  if (!mp3->begin(audioBuffer, out)) {
+    Serial.println("MP3 begin failed.");
+    stopPlayback();
     return false;
   }
-
-
-  // ----------------------------------------------------------
-  // Create RAM audio buffer
-  // ----------------------------------------------------------
-
-  audioBuffer =
-    new AudioFileSourceBuffer(
-      file,
-      AUDIO_BUFFER_SIZE
-    );
-
-  if (audioBuffer == nullptr)
-  {
-    Serial.println(
-      "ERROR: Cannot allocate AudioFileSourceBuffer."
-    );
-
-    delete file;
-    file = nullptr;
-
-    digitalWrite(
-      MOTOR_PIN,
-      LOW
-    );
-
-    return false;
-  }
-
-
-  // ----------------------------------------------------------
-  // Create MP3 decoder
-  // ----------------------------------------------------------
-
-  mp3 =
-    new AudioGeneratorMP3();
-
-  if (mp3 == nullptr)
-  {
-    Serial.println(
-      "ERROR: Cannot allocate AudioGeneratorMP3."
-    );
-
-    delete audioBuffer;
-    audioBuffer = nullptr;
-
-    delete file;
-    file = nullptr;
-
-    digitalWrite(
-      MOTOR_PIN,
-      LOW
-    );
-
-    return false;
-  }
-
-
-  // ----------------------------------------------------------
-  // Start MP3 decoder
-  // ----------------------------------------------------------
-
-  if (
-    !mp3->begin(
-      audioBuffer,
-      out
-    )
-  )
-  {
-    Serial.println(
-      "ERROR: MP3 begin() failed."
-    );
-
-    delete mp3;
-    mp3 = nullptr;
-
-    delete audioBuffer;
-    audioBuffer = nullptr;
-
-    delete file;
-    file = nullptr;
-
-    digitalWrite(
-      MOTOR_PIN,
-      LOW
-    );
-
-    return false;
-  }
-
 
   isPlaying = true;
-
-  // Starting animation will naturally
-  // transition into playing animation.
-  setLEDMode(
-    LED_STARTING
-  );
-
-  Serial.println(
-    "MP3 playback started."
-  );
-
+  Serial.println("MP3 playback started.");
   return true;
 }
 
-
 // ============================================================
 // NFC TASK
-//
-// Runs on CORE 0
 // ============================================================
 
-void nfcTask(
-  void *parameter
-)
-{
-  Serial.println(
-    "NFC task started on Core 0."
-  );
+void nfcTask(void *parameter) {
+  Serial.println("NFC task started on Core 0.");
 
-  while (nfcTaskRunning)
-  {
+  while (nfcTaskRunning) {
     char detectedUID[15] = "";
 
-    bool detected =
-      readNFCUID(
-        detectedUID,
-        sizeof(detectedUID)
-      );
-
-
-    // ========================================================
-    // TAG FOUND
-    // ========================================================
-
-    if (detected)
-    {
+    if (readNFCUID(detectedUID, sizeof(detectedUID))) {
       missingReads = 0;
 
+      if (currentUID[0] == '\0' || strcmp(detectedUID, currentUID) != 0) {
+        Serial.print("NFC detected: ");
+        Serial.println(detectedUID);
 
-      // If this is a NEW tag
-      if (
-        strcmp(
-          detectedUID,
-          currentUID
-        ) != 0
-      )
-      {
-        Serial.print(
-          "NFC tag detected: "
-        );
-
-        Serial.println(
-          detectedUID
-        );
-
-        if (nfcMutex != nullptr)
-        {
-          xSemaphoreTake(
-            nfcMutex,
-            portMAX_DELAY
-          );
-        }
-
-        strncpy(
-          nfcUID,
-          detectedUID,
-          sizeof(nfcUID) - 1
-        );
-
-        nfcUID[
-          sizeof(nfcUID) - 1
-        ] = '\0';
-
-        nfcTagDetected = true;
-
-        if (nfcMutex != nullptr)
-        {
-          xSemaphoreGive(
-            nfcMutex
-          );
+        if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
+          strncpy(nfcUID, detectedUID, sizeof(nfcUID) - 1);
+          nfcUID[sizeof(nfcUID) - 1] = '\0';
+          nfcTagDetected = true;
+          xSemaphoreGive(nfcMutex);
         }
       }
-    }
-
-
-    // ========================================================
-    // TAG NOT FOUND
-    // ========================================================
-
-    else
-    {
-      if (
-        currentUID[0] != '\0'
-      )
-      {
+    } else {
+      if (currentUID[0] != '\0') {
         missingReads++;
 
-        if (
-          missingReads >=
-          NFC_MISSING_LIMIT
-        )
-        {
-          Serial.println(
-            "NFC tag removed."
-          );
+        if (missingReads >= NFC_MISSING_LIMIT) {
+          Serial.println("NFC tag removed.");
 
-          if (nfcMutex != nullptr)
-          {
-            xSemaphoreTake(
-              nfcMutex,
-              portMAX_DELAY
-            );
+          if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
+            nfcTagRemoved = true;
+            xSemaphoreGive(nfcMutex);
           }
-
-          nfcTagRemoved = true;
-
-          if (nfcMutex != nullptr)
-          {
-            xSemaphoreGive(
-              nfcMutex
-            );
-          }
-
           missingReads = 0;
         }
       }
     }
 
-
-    // ========================================================
-    // ADAPTIVE NFC INTERVAL
-    // ========================================================
-
-    if (isPlaying)
-    {
-      vTaskDelay(
-        pdMS_TO_TICKS(
-          NFC_SCAN_PLAYING
-        )
-      );
-    }
-    else
-    {
-      vTaskDelay(
-        pdMS_TO_TICKS(
-          NFC_SCAN_IDLE
-        )
-      );
-    }
+    vTaskDelay(pdMS_TO_TICKS(isPlaying ? NFC_SCAN_PLAYING : NFC_SCAN_IDLE));
   }
 
-
-  Serial.println(
-    "NFC task stopped."
-  );
-
-  vTaskDelete(
-    nullptr
-  );
+  vTaskDelete(nullptr);
 }
-
 
 // ============================================================
 // ENCODER
 // ============================================================
 
-void handleEncoder()
-{
-  int clkState =
-    digitalRead(
-      ENCODER_CLK
-    );
+void handleEncoder() {
+  int clkState = digitalRead(ENCODER_CLK);
 
-  // Detect CLK transition
-  if (
-    clkState != lastClkState
-  )
-  {
-    // Only react on falling edge
-    if (clkState == LOW)
-    {
-      int dtState =
-        digitalRead(
-          ENCODER_DT
-        );
+  if (clkState == LOW && lastClkState == HIGH) {
+    int dtState = digitalRead(ENCODER_DT);
 
-      if (
-        dtState != clkState
-      )
-      {
-        // Clockwise
-        if (
-          volume < MAX_VOLUME
-        )
-        {
-          volume++;
-        }
-      }
-      else
-      {
-        // Counter-clockwise
-        if (
-          volume > MIN_VOLUME
-        )
-        {
-          volume--;
-        }
-      }
-
-      float gain =
-        (float)volume /
-        (float)MAX_VOLUME;
-
-      if (out != nullptr)
-      {
-        out->SetGain(
-          gain
-        );
-      }
-
-      Serial.print(
-        "Volume: "
-      );
-
-      Serial.print(
-        volume
-      );
-
-      Serial.print(
-        " / "
-      );
-
-      Serial.println(
-        MAX_VOLUME
-      );
+    if (dtState != clkState) {
+      if (volume < MAX_VOLUME) volume++;
+    } else {
+      if (volume > MIN_VOLUME) volume--;
     }
 
-    lastClkState =
-      clkState;
-  }
-}
+    float gain = (float)volume / (float)MAX_VOLUME;
 
+    if (out != nullptr) {
+      out->SetGain(gain);
+    }
+
+    Serial.print("Volume: ");
+    Serial.println(volume);
+  }
+
+  lastClkState = clkState;
+}
 
 // ============================================================
 // SETUP
 // ============================================================
 
-void setup()
-{
-  Serial.begin(
-    115200
-  );
-
+void setup() {
+  Serial.begin(115200);
   delay(1000);
 
-  Serial.println();
-  Serial.println();
-  Serial.println(
-    "======================================"
-  );
+  // Motor
+  pinMode(MOTOR_PIN, OUTPUT);
+  digitalWrite(MOTOR_PIN, LOW);
 
-  Serial.println(
-    " NFC VINYL PLAYER v2.1"
-  );
+  // Encoder
+  pinMode(ENCODER_CLK, INPUT_PULLUP);
+  pinMode(ENCODER_DT, INPUT_PULLUP);
+  pinMode(ENCODER_SW, INPUT_PULLUP);
 
-  Serial.println(
-    " ESP8266Audio + ESP32-WROOM-32"
-  );
+  // LEDs
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(LED_BRIGHTNESS);
+  FastLED.clear();
+  FastLED.show();
 
-  Serial.println(
-    " WS2812B LED RING"
-  );
+  // Random seed
+  randomSeed(esp_random());
 
-  Serial.println(
-    "======================================"
-  );
+  // SD
+  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 
-
-  // ==========================================================
-  // MOTOR
-  // ==========================================================
-
-  pinMode(
-    MOTOR_PIN,
-    OUTPUT
-  );
-
-  digitalWrite(
-    MOTOR_PIN,
-    LOW
-  );
-
-
-  // ==========================================================
-  // ENCODER
-  // ==========================================================
-
-  pinMode(
-    ENCODER_CLK,
-    INPUT_PULLUP
-  );
-
-  pinMode(
-    ENCODER_DT,
-    INPUT_PULLUP
-  );
-
-  pinMode(
-    ENCODER_SW,
-    INPUT_PULLUP
-  );
-
-  lastClkState =
-    digitalRead(
-      ENCODER_CLK
-    );
-
-
-  // ==========================================================
-  // LED RING
-  // ==========================================================
-
-  FastLED.addLeds<
-    WS2812B,
-    LED_PIN,
-    GRB
-  >(
-    leds,
-    NUM_LEDS
-  );
-
-  FastLED.setBrightness(
-    LED_BRIGHTNESS
-  );
-
-  clearLEDs();
-
-  setLEDMode(
-    LED_STANDBY
-  );
-
-
-  // ==========================================================
-  // SD CARD
-  // ==========================================================
-
-  Serial.println();
-  Serial.println(
-    "Initializing SD card..."
-  );
-
-  sdSPI.begin(
-    SD_SCK,
-    SD_MISO,
-    SD_MOSI,
-    SD_CS
-  );
-
-  if (
-    !SD.begin(
-      SD_CS,
-      sdSPI,
-      SD_SPEED
-    )
-  )
-  {
-    Serial.println(
-      "ERROR: SD initialization failed!"
-    );
-
-    while (true)
-    {
-      delay(1000);
+  if (!SD.begin(SD_CS, sdSPI, SD_SPEED)) {
+    Serial.println("SD card initialization failed!");
+  } else {
+    Serial.println("SD card initialized.");
+    if (!SD.exists("/player")) {
+      SD.mkdir("/player");
     }
   }
 
-  Serial.println(
-    "SD initialized successfully."
-  );
-
-  Serial.print(
-    "SD speed: "
-  );
-
-  Serial.print(
-    SD_SPEED / 1000000
-  );
-
-  Serial.println(
-    " MHz"
-  );
-
-
-  // ==========================================================
-  // CHECK PLAYER DIRECTORY
-  // ==========================================================
-
-  if (
-    !SD.exists(
-      "/player"
-    )
-  )
-  {
-    Serial.println(
-      "Creating /player directory..."
-    );
-
-    if (
-      !SD.mkdir(
-        "/player"
-      )
-    )
-    {
-      Serial.println(
-        "WARNING: Could not create /player."
-      );
-    }
-  }
-
-  Serial.println(
-    "Player directory ready."
-  );
-
-
-  // ==========================================================
   // PN532
-  // ==========================================================
-
-  Serial.println();
-  Serial.println(
-    "Initializing PN532..."
-  );
-
   nfc.begin();
+  uint32_t versiondata = nfc.getFirmwareVersion();
 
-  uint32_t versiondata =
-    nfc.getFirmwareVersion();
-
-  if (!versiondata)
-  {
-    Serial.println(
-      "ERROR: PN532 not found!"
-    );
-
-    while (true)
-    {
-      delay(1000);
-    }
+  if (!versiondata) {
+    Serial.println("Didn't find PN532.");
+  } else {
+    Serial.println("PN532 found.");
+    nfc.SAMConfig();
   }
 
-  Serial.print(
-    "PN532 firmware: "
-  );
+  // I2S
+  out = new AudioOutputI2S();
+  out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  out->SetGain((float)volume / (float)MAX_VOLUME);
 
-  Serial.print(
-    (versiondata >> 24) & 0xFF,
-    HEX
-  );
+  // FreeRTOS Synchronization
+  nfcMutex = xSemaphoreCreateMutex();
 
-  Serial.print(
-    "."
-  );
+  // NFC task on Core 0
+  xTaskCreatePinnedToCore(nfcTask, "NFC_Task", 4096, nullptr, 1, &nfcTaskHandle, 0);
 
-  Serial.println(
-    (versiondata >> 16) & 0xFF,
-    HEX
-  );
+  // Initial LED state
+  setLEDMode(LED_STANDBY);
 
-
-  nfc.SAMConfig();
-
-  Serial.println(
-    "PN532 ready."
-  );
-
-
-  // ==========================================================
-  // I2S OUTPUT
-  // ==========================================================
-
-  Serial.println();
-  Serial.println(
-    "Initializing I2S..."
-  );
-
-  out =
-    new AudioOutputI2S();
-
-  if (out == nullptr)
-  {
-    Serial.println(
-      "ERROR: Cannot allocate AudioOutputI2S!"
-    );
-
-    while (true)
-    {
-      delay(1000);
-    }
-  }
-
-  out->SetPinout(
-    I2S_BCLK,
-    I2S_LRC,
-    I2S_DOUT
-  );
-
-  float initialGain =
-    (float)volume /
-    (float)MAX_VOLUME;
-
-  out->SetGain(
-    initialGain
-  );
-
-  Serial.println(
-    "I2S ready."
-  );
-
-  Serial.print(
-    "Initial volume: "
-  );
-
-  Serial.println(
-    volume
-  );
-
-
-  // ==========================================================
-  // NFC MUTEX
-  // ==========================================================
-
-  nfcMutex =
-    xSemaphoreCreateMutex();
-
-  if (nfcMutex == nullptr)
-  {
-    Serial.println(
-      "ERROR: Failed to create NFC mutex!"
-    );
-
-    while (true)
-    {
-      delay(1000);
-    }
-  }
-
-
-  // ==========================================================
-  // START NFC TASK ON CORE 0
-  // ==========================================================
-
-  Serial.println();
-  Serial.println(
-    "Starting NFC task on Core 0..."
-  );
-
-  BaseType_t taskResult =
-    xTaskCreatePinnedToCore(
-      nfcTask,
-      "NFC_Task",
-      4096,
-      nullptr,
-      1,
-      &nfcTaskHandle,
-      0
-    );
-
-  if (
-    taskResult != pdPASS
-  )
-  {
-    Serial.println(
-      "ERROR: Failed to create NFC task!"
-    );
-
-    while (true)
-    {
-      delay(1000);
-    }
-  }
-
-  Serial.println(
-    "NFC task started."
-  );
-
-  Serial.println();
-  Serial.println(
-    "======================================"
-  );
-
-  Serial.println(
-    "SYSTEM READY"
-  );
-
-  Serial.println(
-    "Place NFC tag on reader."
-  );
-
-  Serial.println(
-    "======================================"
-  );
+  Serial.println("System ready.");
 }
-
 
 // ============================================================
 // MAIN LOOP
-//
-// Arduino loop normally runs on Core 1
 // ============================================================
 
-void loop()
-{
-  // ==========================================================
-  // AUDIO LOOP
-  // ==========================================================
+void loop() {
+  // MP3 playback
+  if (isPlaying && mp3 != nullptr && mp3->isRunning()) {
+    if (!mp3->loop()) {
+      Serial.println("Track finished.");
 
-  if (
-    isPlaying &&
-    mp3 != nullptr
-  )
-  {
-    if (
-      mp3->isRunning()
-    )
-    {
-      if (
-        !mp3->loop()
-      )
-      {
-        Serial.println();
-        Serial.println(
-          "MP3 playback finished."
-        );
+      mp3->stop();
+      isPlaying = false;
+      loopCount++;
 
-        mp3->stop();
+      if (loopCount < MAX_LOOPS) {
+        Serial.print("Loop ");
+        Serial.print(loopCount + 1);
+        Serial.print(" / ");
+        Serial.println(MAX_LOOPS);
 
-        isPlaying = false;
+        char replayFile[40];
+        strncpy(replayFile, playingFile, sizeof(replayFile) - 1);
+        replayFile[sizeof(replayFile) - 1] = '\0';
 
+        setLEDMode(LED_LOOP);
 
-        // ----------------------------------------------------
-        // Track finished
-        // ----------------------------------------------------
-
-        loopCount++;
-
-        Serial.print(
-          "Loop "
-        );
-
-        Serial.print(
-          loopCount
-        );
-
-        Serial.print(
-          " / "
-        );
-
-        Serial.println(
-          MAX_LOOPS
-        );
-
-
-        if (
-          loopCount < MAX_LOOPS
-        )
-        {
-          // --------------------------------------------------
-          // LED loop indication
-          // --------------------------------------------------
-
-          setLEDMode(
-            LED_LOOP
-          );
-
-
-          // --------------------------------------------------
-          // Replay same track
-          // --------------------------------------------------
-
-          char replayFile[40];
-
-          strncpy(
-            replayFile,
-            playingFile,
-            sizeof(replayFile) - 1
-          );
-
-          replayFile[
-            sizeof(replayFile) - 1
-          ] = '\0';
-
-          playTrack(
-            replayFile
-          );
-        }
-        else
-        {
-          // --------------------------------------------------
-          // All loops completed
-          // --------------------------------------------------
-
+        if (!playTrack(replayFile)) {
+          Serial.println("Replay failed.");
           stopPlayback();
-
-          enterDeepSleep();
+          setLEDMode(LED_STANDBY);
         }
+      } else {
+        stopPlayback();
+        setLEDMode(LED_STANDBY);
+        enterDeepSleep();
       }
     }
   }
 
-
-  // ==========================================================
-  // NFC: NEW TAG
-  // ==========================================================
-
+  // NFC new tag
   bool newTag = false;
+  char newUID[15] = "";
 
-  if (
-    nfcMutex != nullptr
-  )
-  {
-    xSemaphoreTake(
-      nfcMutex,
-      portMAX_DELAY
-    );
+  if (xSemaphoreTake(nfcMutex, 0) == pdTRUE) {
+    if (nfcTagDetected) {
+      strncpy(newUID, nfcUID, sizeof(newUID) - 1);
+      newUID[sizeof(newUID) - 1] = '\0';
+      nfcTagDetected = false;
+      newTag = true;
+    }
+    xSemaphoreGive(nfcMutex);
   }
 
-  if (
-    nfcTagDetected
-  )
-  {
-    nfcTagDetected = false;
+  if (newTag) {
+    Serial.print("New NFC tag: ");
+    Serial.println(newUID);
 
-    newTag = true;
-  }
-
-  char detectedUID[15] = "";
-
-  if (newTag)
-  {
-    strncpy(
-      detectedUID,
-      nfcUID,
-      sizeof(detectedUID) - 1
-    );
-
-    detectedUID[
-      sizeof(detectedUID) - 1
-    ] = '\0';
-  }
-
-  if (
-    nfcMutex != nullptr
-  )
-  {
-    xSemaphoreGive(
-      nfcMutex
-    );
-  }
-
-
-  // ==========================================================
-  // PROCESS NEW TAG
-  // ==========================================================
-
-  if (newTag)
-  {
-    Serial.println();
-
-    Serial.print(
-      "Processing NFC UID: "
-    );
-
-    Serial.println(
-      detectedUID
-    );
-
-
-    // Save current UID
-    strncpy(
-      currentUID,
-      detectedUID,
-      sizeof(currentUID) - 1
-    );
-
-    currentUID[
-      sizeof(currentUID) - 1
-    ] = '\0';
-
-
-    // Build filename
-    //
-    // IMPORTANT:
-    // Keep the original working path:
-    //
-    // /player/<UID>.mp3
+    strncpy(currentUID, newUID, sizeof(currentUID) - 1);
+    currentUID[sizeof(currentUID) - 1] = '\0';
 
     char filename[40];
+    snprintf(filename, sizeof(filename), "/player/%s.mp3", currentUID);
 
-    snprintf(
-      filename,
-      sizeof(filename),
-      "/player/%s.mp3",
-      currentUID
-    );
-
-
-    Serial.print(
-      "Mapped file: "
-    );
-
-    Serial.println(
-      filename
-    );
-
-
-    // Reset loop counter
     loopCount = 0;
 
+    selectRandomPattern();
+    setLEDMode(LED_STARTING);
 
-    // Start track
-    if (
-      playTrack(
-        filename
-      )
-    )
-    {
-      // Playback has started.
-      // The starting LED animation will
-      // transition naturally into playing.
-    }
-    else
-    {
-      Serial.println(
-        "Could not start track."
-      );
-
+    if (!playTrack(filename)) {
+      Serial.println("Playback failed.");
       currentUID[0] = '\0';
-
-      setLEDMode(
-        LED_STANDBY
-      );
+      setLEDMode(LED_STANDBY);
     }
   }
 
-
-  // ==========================================================
-  // NFC: TAG REMOVED
-  // ==========================================================
-
+  // NFC tag removed
   bool tagRemoved = false;
 
-  if (
-    nfcMutex != nullptr
-  )
-  {
-    xSemaphoreTake(
-      nfcMutex,
-      portMAX_DELAY
-    );
+  if (xSemaphoreTake(nfcMutex, 0) == pdTRUE) {
+    if (nfcTagRemoved) {
+      nfcTagRemoved = false;
+      tagRemoved = true;
+    }
+    xSemaphoreGive(nfcMutex);
   }
 
-  if (
-    nfcTagRemoved
-  )
-  {
-    nfcTagRemoved = false;
-
-    tagRemoved = true;
-  }
-
-  if (
-    nfcMutex != nullptr
-  )
-  {
-    xSemaphoreGive(
-      nfcMutex
-    );
-  }
-
-
-  if (tagRemoved)
-  {
-    Serial.println(
-      "Tag removal detected."
-    );
-
-
-    // --------------------------------------------------------
-    // LED stopping animation
-    // --------------------------------------------------------
-
-    setLEDMode(
-      LED_STOPPING
-    );
-
-
-    // Clear current UID
+  if (tagRemoved) {
+    Serial.println("Tag removal detected.");
     currentUID[0] = '\0';
 
+    setLEDMode(LED_STOPPING);
 
-    // Stop current playback
-    if (isPlaying)
-    {
+    if (isPlaying) {
       stopPlayback();
     }
   }
 
-
-  // ==========================================================
-  // ENCODER
-  // ==========================================================
-
+  // Controls & LED Update
   handleEncoder();
-
-
-  // ==========================================================
-  // LED UPDATE
-  // ==========================================================
-
   updateLEDs();
-
-
-  // ==========================================================
-  // VERY SHORT DELAY
-  // ==========================================================
 
   delay(1);
 }
