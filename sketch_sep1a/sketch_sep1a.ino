@@ -47,7 +47,7 @@ SPIClass sdSPI(HSPI);
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 // Аудио обект
-Audio audio
+Audio audio;
 
 // Структура за връзка между NFC UID и MP3 файл
 struct TrackMap {
