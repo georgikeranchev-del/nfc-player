@@ -4,6 +4,7 @@
 #include <FS.h>
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
+#include "driver/rtc_io.h"
 
 #include "AudioFileSourceSD.h"
 #include "AudioFileSourceBuffer.h"
@@ -134,8 +135,6 @@ LEDPattern lastPattern = PATTERN_COUNT;
 
 uint32_t ledModeStart = 0;
 uint32_t lastLEDUpdate = 0;
-uint32_t patternStartTime = 0;
-uint16_t ledFrame = 0;
 
 // ============================================================
 // HARDWARE OBJECTS
@@ -159,6 +158,7 @@ volatile bool isPlaying = false;
 uint8_t loopCount = 0;
 uint8_t volume = INITIAL_VOLUME;
 int lastClkState = HIGH;
+uint32_t lastEncoderTurn = 0;
 
 // ============================================================
 // NFC TASK GLOBALS
@@ -185,15 +185,6 @@ void clearLEDs() {
 void setLEDMode(LEDMode mode) {
   ledMode = mode;
   ledModeStart = millis();
-
-  if (mode == LED_PLAYING) {
-    patternStartTime = millis();
-    ledFrame = 0;
-  }
-
-  if (mode == LED_STARTING || mode == LED_LOOP) {
-    ledFrame = 0;
-  }
 }
 
 void selectRandomPattern() {
@@ -445,7 +436,6 @@ void updateLEDs() {
   }
 
   FastLED.show();
-  ledFrame++;
 }
 
 // ============================================================
@@ -481,10 +471,16 @@ void stopPlayback() {
 
 void enterDeepSleep() {
   Serial.println("Playback finished. Entering deep sleep...");
+  digitalWrite(MOTOR_PIN, LOW);
   clearLEDs();
   delay(200);
 
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)ENCODER_SW, 0);
+  // Hold the encoder switch HIGH during sleep so a press pulls it LOW and wakes the ESP32.
+  rtc_gpio_pullup_en((gpio_num_t)ENCODER_SW);
+  rtc_gpio_pulldown_dis((gpio_num_t)ENCODER_SW);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)ENCODER_SW, 0);  // wake on LOW = button pressed
+
+  Serial.flush();
   esp_deep_sleep_start();
 }
 
@@ -544,16 +540,33 @@ bool playTrack(const char *filename) {
 // NFC TASK
 // ============================================================
 
+// Update the active UID under the mutex (owned by loop(), read by nfcTask on core 0).
+void setCurrentUID(const char *uid) {
+  if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
+    strncpy(currentUID, uid, sizeof(currentUID) - 1);
+    currentUID[sizeof(currentUID) - 1] = '\0';
+    xSemaphoreGive(nfcMutex);
+  }
+}
+
 void nfcTask(void *parameter) {
   Serial.println("NFC task started on Core 0.");
 
   while (nfcTaskRunning) {
     char detectedUID[15] = "";
 
+    // Snapshot the active UID under the mutex to avoid a cross-core data race.
+    char activeUID[15] = "";
+    if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
+      strncpy(activeUID, currentUID, sizeof(activeUID) - 1);
+      activeUID[sizeof(activeUID) - 1] = '\0';
+      xSemaphoreGive(nfcMutex);
+    }
+
     if (readNFCUID(detectedUID, sizeof(detectedUID))) {
       missingReads = 0;
 
-      if (currentUID[0] == '\0' || strcmp(detectedUID, currentUID) != 0) {
+      if (activeUID[0] == '\0' || strcmp(detectedUID, activeUID) != 0) {
         Serial.print("NFC detected: ");
         Serial.println(detectedUID);
 
@@ -565,7 +578,7 @@ void nfcTask(void *parameter) {
         }
       }
     } else {
-      if (currentUID[0] != '\0') {
+      if (activeUID[0] != '\0') {
         missingReads++;
 
         if (missingReads >= NFC_MISSING_LIMIT) {
@@ -590,26 +603,35 @@ void nfcTask(void *parameter) {
 // ENCODER
 // ============================================================
 
+// Map the 0..MAX_VOLUME detent to a perceptual (square-law) gain curve.
+float volumeToGain(uint8_t vol) {
+  if (vol == 0) return 0.0f;
+  float t = (float)vol / (float)MAX_VOLUME;  // 0..1 linear step
+  return t * t;                              // approximates loudness perception
+}
+
 void handleEncoder() {
   int clkState = digitalRead(ENCODER_CLK);
 
   if (clkState == LOW && lastClkState == HIGH) {
-    int dtState = digitalRead(ENCODER_DT);
+    uint32_t now = millis();
+    if (now - lastEncoderTurn >= 2) {  // debounce spurious edges
+      lastEncoderTurn = now;
+      int dtState = digitalRead(ENCODER_DT);
 
-    if (dtState != clkState) {
-      if (volume < MAX_VOLUME) volume++;
-    } else {
-      if (volume > MIN_VOLUME) volume--;
+      if (dtState != clkState) {
+        if (volume < MAX_VOLUME) volume++;
+      } else {
+        if (volume > MIN_VOLUME) volume--;
+      }
+
+      if (out != nullptr) {
+        out->SetGain(volumeToGain(volume));
+      }
+
+      Serial.print("Volume: ");
+      Serial.println(volume);
     }
-
-    float gain = (float)volume / (float)MAX_VOLUME;
-
-    if (out != nullptr) {
-      out->SetGain(gain);
-    }
-
-    Serial.print("Volume: ");
-    Serial.println(volume);
   }
 
   lastClkState = clkState;
@@ -640,6 +662,7 @@ void setup() {
 
   // Random seed
   randomSeed(esp_random());
+  random16_set_seed(esp_random());  // seed FastLED RNG so sparkle patterns differ each boot
 
   // SD
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
@@ -667,7 +690,7 @@ void setup() {
   // I2S
   out = new AudioOutputI2S();
   out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  out->SetGain((float)volume / (float)MAX_VOLUME);
+  out->SetGain(volumeToGain(volume));
 
   // FreeRTOS Synchronization
   nfcMutex = xSemaphoreCreateMutex();
@@ -738,8 +761,7 @@ void loop() {
     Serial.print("New NFC tag: ");
     Serial.println(newUID);
 
-    strncpy(currentUID, newUID, sizeof(currentUID) - 1);
-    currentUID[sizeof(currentUID) - 1] = '\0';
+    setCurrentUID(newUID);
 
     char filename[40];
     snprintf(filename, sizeof(filename), "/player/%s.mp3", currentUID);
@@ -751,7 +773,7 @@ void loop() {
 
     if (!playTrack(filename)) {
       Serial.println("Playback failed.");
-      currentUID[0] = '\0';
+      setCurrentUID("");
       setLEDMode(LED_STANDBY);
     }
   }
@@ -769,7 +791,7 @@ void loop() {
 
   if (tagRemoved) {
     Serial.println("Tag removal detected.");
-    currentUID[0] = '\0';
+    setCurrentUID("");
 
     setLEDMode(LED_STOPPING);
 
