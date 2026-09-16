@@ -50,6 +50,8 @@ const uint32_t NFC_SCAN_IDLE = 150;
 const uint32_t NFC_SCAN_PLAYING = 200;
 const uint8_t NFC_MISSING_LIMIT = 2;
 
+const uint32_t IDLE_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;  // deep sleep after 5 min of inactivity
+
 const uint8_t INITIAL_VOLUME = 12;
 const uint8_t MIN_VOLUME = 0;
 const uint8_t MAX_VOLUME = 21;
@@ -159,6 +161,7 @@ uint8_t loopCount = 0;
 uint8_t volume = INITIAL_VOLUME;
 int lastClkState = HIGH;
 uint32_t lastEncoderTurn = 0;
+uint32_t lastActivity = 0;
 
 // ============================================================
 // NFC TASK GLOBALS
@@ -470,7 +473,7 @@ void stopPlayback() {
 }
 
 void enterDeepSleep() {
-  Serial.println("Playback finished. Entering deep sleep...");
+  Serial.println("Entering deep sleep...");
   digitalWrite(MOTOR_PIN, LOW);
   clearLEDs();
   delay(200);
@@ -617,6 +620,7 @@ void handleEncoder() {
     uint32_t now = millis();
     if (now - lastEncoderTurn >= 2) {  // debounce spurious edges
       lastEncoderTurn = now;
+      lastActivity = now;
       int dtState = digitalRead(ENCODER_DT);
 
       if (dtState != clkState) {
@@ -700,6 +704,7 @@ void setup() {
 
   // Initial LED state
   setLEDMode(LED_STANDBY);
+  lastActivity = millis();
 
   Serial.println("System ready.");
 }
@@ -711,6 +716,7 @@ void setup() {
 void loop() {
   // MP3 playback
   if (isPlaying && mp3 != nullptr && mp3->isRunning()) {
+    lastActivity = millis();
     if (!mp3->loop()) {
       Serial.println("Track finished.");
 
@@ -738,7 +744,7 @@ void loop() {
       } else {
         stopPlayback();
         setLEDMode(LED_STANDBY);
-        enterDeepSleep();
+        lastActivity = millis();  // begin idle countdown instead of sleeping immediately
       }
     }
   }
@@ -761,6 +767,7 @@ void loop() {
     Serial.print("New NFC tag: ");
     Serial.println(newUID);
 
+    lastActivity = millis();
     setCurrentUID(newUID);
 
     char filename[40];
@@ -792,6 +799,7 @@ void loop() {
   if (tagRemoved) {
     Serial.println("Tag removal detected.");
     setCurrentUID("");
+    lastActivity = millis();
 
     setLEDMode(LED_STOPPING);
 
@@ -803,6 +811,11 @@ void loop() {
   // Controls & LED Update
   handleEncoder();
   updateLEDs();
+
+  // Idle auto-sleep: fires in both cases (tag removed or 3 loops elapsed)
+  if (!isPlaying && (millis() - lastActivity >= IDLE_SLEEP_TIMEOUT)) {
+    enterDeepSleep();
+  }
 
   delay(1);
 }
