@@ -114,7 +114,13 @@ const LEDPattern activePatterns[] = {
   PATTERN_DUAL_ORBIT,
   PATTERN_ROTATING_PULSE,
   PATTERN_COMET_SPARKLES,
-  PATTERN_BREATHING_ORBIT
+  PATTERN_BREATHING_ORBIT,
+  PATTERN_EXPANDING_RING,
+  PATTERN_TWO_COLOR_CHASE,
+  PATTERN_CENTERED_COMET,
+  PATTERN_RANDOM_FIREFLIES,
+  PATTERN_WAVE_AROUND_VINYL,
+  PATTERN_HEARTBEAT_ORBIT
 };
 
 const uint8_t NUM_ACTIVE_PATTERNS = sizeof(activePatterns) / sizeof(activePatterns[0]);
@@ -370,8 +376,9 @@ void updatePlayingPattern() {
 // ============================================================
 
 void updateLEDStandby() {
-  uint8_t brightness = beatsin8(8, 5, 28);
-  fill_solid(leds, NUM_LEDS, CRGB(brightness / 3, brightness / 2, brightness));
+  // Slow, smooth breathing fade so the ring is clearly "alive" while idle.
+  uint8_t breath = beatsin8(6, 3, 40);  // ~6 bpm: gentle rise and fall
+  fill_solid(leds, NUM_LEDS, CRGB(breath / 4, breath / 2, breath));
 }
 
 void updateLEDStarting() {
@@ -420,6 +427,7 @@ void updateLEDStopping() {
     }
   } else {
     fill_solid(leds, NUM_LEDS, CRGB::Black);
+    setLEDMode(LED_STANDBY);  // resume idle breathing after the fade-out completes
   }
 }
 
