@@ -37,7 +37,7 @@ button / encoder long-press — and charging works in that state regardless of v
 | 32   | CLK           | Encoder          |
 | 33   | DT            | Encoder          |
 | 2    | AMP_SD        | MAX98357A (mute) |
-| 12   | KEY tap       | IP5310 KEY (via transistor) |
+| 17   | KEY tap       | IP5310 KEY (via transistor) |
 
 ---
 
@@ -121,7 +121,7 @@ button / encoder long-press — and charging works in that state regardless of v
 MOSFET version (recommended):
 
 ```
-   GPIO12 ─[1kΩ]─ Gate ──[2N7000]
+   GPIO17 ─[1kΩ]─ Gate ──[2N7000]
                    │          Drain ── IP5310 KEY ──[momentary button]── GND
                 [100kΩ]       Source ── GND
                    │
@@ -131,18 +131,20 @@ MOSFET version (recommended):
 BJT alternative:
 
 ```
-   GPIO12 ─[1kΩ]─ Base ──[2N3904]
+   GPIO17 ─[1kΩ]─ Base ──[2N3904]
                    │          Collector ── IP5310 KEY ──[momentary button]── GND
                 [10kΩ]        Emitter ── GND
                    │
                   GND
 ```
 
-- GPIO12 HIGH → transistor pulls KEY to GND = simulated short tap (keep-alive).
+- GPIO17 HIGH → transistor pulls KEY to GND = simulated short tap (keep-alive).
 - The **momentary button** (normally-open, non-latching) across KEY↔GND is the
   manual power-on.
 - The gate/base pulldown is required so KEY isn't tapped during the reset
   high-Z window (brown-out detector is disabled in firmware).
+- **GPIO17 replaces GPIO12** — GPIO12 is a boot strapping pin (must be LOW at
+  reset); a keep-alive pulse coinciding with a reset could block boot.
 
 ---
 
@@ -201,12 +203,14 @@ BJT alternative:
 | Node        | Caps                    |
 |-------------|-------------------------|
 | IP5310      | 1000µF + 100nF          |
-| ESP32       | 100nF                   |
+| ESP32 VIN   | 470µF + 100nF           |
 | MAX98357A   | 100µF + 100nF           |
 | LED ring    | 470µF + 100nF           |
 | Motor rail  | 220µF + 100nF (brushes) |
 
 100nF can be ceramic (MLCC) or polyester film — both fine here; rating ≥ 16 V.
+The 470µF at ESP32 VIN rides through brief boost-startup/charger transients
+(it will NOT hold the rail if the IP5310 boost fully collapses under low load).
 
 ---
 

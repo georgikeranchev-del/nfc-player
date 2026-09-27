@@ -5,6 +5,8 @@
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
 #include "driver/rtc_io.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 #include "AudioFileSourceSD.h"
 #include "AudioFileSourceBuffer.h"
@@ -38,6 +40,9 @@
 #define LED_PIN     21
 #define NUM_LEDS    24
 
+#define AMP_SD      2    // MAX98357A SD: HIGH = amp on (9 dB), LOW = shutdown (mute, anti-pop)
+#define IP5310_KEY  17   // drives a transistor that taps the IP5310 KEY pin to keep it awake
+
 // ============================================================
 // SETTINGS
 // ============================================================
@@ -45,6 +50,14 @@
 const uint8_t MAX_LOOPS = 3;
 const uint32_t SD_SPEED = 10000000;
 const size_t AUDIO_BUFFER_SIZE = 8192;
+const uint32_t AUDIO_FADE_IN_MS = 1000;  // ramp volume 0 -> target so the amp's startup current rises gently
+
+// Periodically tap the IP5310 KEY pin so its low-load auto-shutdown doesn't cut power while we're awake.
+const bool IP5310_KEEPALIVE_ENABLED = true;
+const uint32_t IP5310_KEEPALIVE_INTERVAL = 20000;  // < ~30 s bank dropout, with margin
+const uint16_t IP5310_KEEPALIVE_PULSE_MS = 120;
+
+const uint32_t LONG_PRESS_MS = 1500;  // hold the encoder button this long to force power-off
 
 const uint32_t NFC_SCAN_IDLE = 150;
 const uint32_t NFC_SCAN_PLAYING = 200;
@@ -57,10 +70,25 @@ const uint8_t MIN_VOLUME = 0;
 const uint8_t MAX_VOLUME = 21;
 
 // ============================================================
+// MOTOR SOFT-START (PWM)
+// ============================================================
+
+// Ramp the motor with PWM so the IP5310 doesn't see the full stall/inrush current at once.
+const uint8_t MOTOR_PWM_CHANNEL = 0;
+const uint32_t MOTOR_PWM_FREQ = 20000;   // 20 kHz: above hearing range, silent switching
+const uint8_t MOTOR_PWM_RES = 8;         // 8-bit duty (0..255)
+const uint8_t MOTOR_DUTY_MAX = 255;      // absolute ceiling
+const uint8_t MOTOR_RUN_DUTY = 230;      // steady turntable speed -- tune this to hit ~33 1/3 RPM
+const uint8_t MOTOR_DUTY_MIN = 60;       // minimum duty that reliably overcomes stall friction
+const uint32_t MOTOR_SOFT_START_MS = 600; // ramp duration; also the head-start before audio
+const uint16_t MOTOR_RAMP_STEP_MS = 15;   // time between ramp steps
+
+// ============================================================
 // LED SETTINGS
 // ============================================================
 
-const uint8_t LED_BRIGHTNESS = 120;
+const uint8_t LED_BRIGHTNESS = 100;      // steady playback brightness (lowered to free supply headroom)
+const uint8_t LED_BRIGHTNESS_MIN = 20;   // dim level held while the motor draws its inrush current
 const uint16_t LED_UPDATE_INTERVAL = 20;
 
 CRGB leds[NUM_LEDS];
@@ -165,6 +193,13 @@ char playingFile[40] = "";
 volatile bool isPlaying = false;
 uint8_t loopCount = 0;
 uint8_t volume = INITIAL_VOLUME;
+uint32_t audioFadeStart = 0;
+bool audioFadingIn = false;
+uint32_t lastKeepAlive = 0;
+uint32_t keyPulseStart = 0;
+bool keyPulseActive = false;
+uint32_t buttonPressStart = 0;
+bool buttonWasPressed = false;
 int lastClkState = HIGH;
 uint32_t lastEncoderTurn = 0;
 uint32_t lastActivity = 0;
@@ -385,6 +420,9 @@ void updateLEDStarting() {
   uint32_t elapsed = millis() - ledModeStart;
   fill_solid(leds, NUM_LEDS, CRGB::Black);
 
+  // Ramp master brightness up alongside the ring fill so LED current rises gradually, not all at once.
+  FastLED.setBrightness(map(min(elapsed, (uint32_t)1000), 0, 1000, LED_BRIGHTNESS_MIN, LED_BRIGHTNESS));
+
   uint8_t count = map(min(elapsed, (uint32_t)1000), 0, 1000, 0, NUM_LEDS);
 
   for (uint8_t i = 0; i < count; i++) {
@@ -393,6 +431,7 @@ void updateLEDStarting() {
   }
 
   if (elapsed >= 1000) {
+    FastLED.setBrightness(LED_BRIGHTNESS);
     setLEDMode(LED_PLAYING);
   }
 }
@@ -438,6 +477,11 @@ void updateLEDs() {
   }
   lastLEDUpdate = now;
 
+  // Keep full brightness in every mode except the startup ramp, which manages it itself.
+  if (ledMode != LED_STARTING) {
+    FastLED.setBrightness(LED_BRIGHTNESS);
+  }
+
   switch (ledMode) {
     case LED_STANDBY:  updateLEDStandby(); break;
     case LED_STARTING: updateLEDStarting(); break;
@@ -453,8 +497,31 @@ void updateLEDs() {
 // SYSTEM CONTROLS
 // ============================================================
 
+void motorOff() {
+  ledcWrite(MOTOR_PWM_CHANNEL, 0);
+}
+
+// Gradually raise the PWM duty from stall-break level to the run duty so the supply current rises slowly.
+void softStartMotor() {
+  Serial.println("Soft-starting motor...");
+  ledcWrite(MOTOR_PWM_CHANNEL, MOTOR_DUTY_MIN);
+
+  uint32_t start = millis();
+  uint32_t elapsed = 0;
+  while (elapsed < MOTOR_SOFT_START_MS) {
+    uint8_t duty = map(elapsed, 0, MOTOR_SOFT_START_MS, MOTOR_DUTY_MIN, MOTOR_RUN_DUTY);
+    ledcWrite(MOTOR_PWM_CHANNEL, duty);
+    delay(MOTOR_RAMP_STEP_MS);
+    elapsed = millis() - start;
+  }
+
+  ledcWrite(MOTOR_PWM_CHANNEL, MOTOR_RUN_DUTY);  // hold turntable speed
+}
+
 void stopPlayback() {
   Serial.println("Stopping playback...");
+
+  digitalWrite(AMP_SD, LOW);  // mute the amp first so stopping mid-stream doesn't pop
 
   if (mp3 != nullptr) {
     if (mp3->isRunning()) {
@@ -475,14 +542,17 @@ void stopPlayback() {
     file = nullptr;
   }
 
-  digitalWrite(MOTOR_PIN, LOW);
+  motorOff();
   isPlaying = false;
+  audioFadingIn = false;
   Serial.println("Playback stopped.");
 }
 
 void enterDeepSleep() {
   Serial.println("Entering deep sleep...");
-  digitalWrite(MOTOR_PIN, LOW);
+  motorOff();
+  digitalWrite(AMP_SD, LOW);
+  digitalWrite(IP5310_KEY, LOW);  // stop tapping KEY so the bank's auto-shutdown can power us off
   clearLEDs();
   delay(200);
 
@@ -529,8 +599,14 @@ bool playTrack(const char *filename) {
     return false;
   }
 
-  digitalWrite(MOTOR_PIN, HIGH);
-  delay(300);
+  // Spin the motor up on its own first so its inrush doesn't coincide with audio startup.
+  // Dim the ring during the ramp so the motor gets the supply's full current headroom.
+  FastLED.setBrightness(LED_BRIGHTNESS_MIN);
+  FastLED.show();
+  softStartMotor();
+
+  // Restart the LED startup ramp now that the motor is up, so their current rises stay staggered.
+  ledModeStart = millis();
 
   file = new AudioFileSourceSD(playingFile);
   audioBuffer = new AudioFileSourceBuffer(file, AUDIO_BUFFER_SIZE);
@@ -542,7 +618,11 @@ bool playTrack(const char *filename) {
     return false;
   }
 
+  out->SetGain(0.0f);        // start silent so un-muting the amp doesn't pop
+  digitalWrite(AMP_SD, HIGH); // wake the amp; loop() ramps volume up from here
   isPlaying = true;
+  audioFadeStart = millis();
+  audioFadingIn = true;
   Serial.println("MP3 playback started.");
   return true;
 }
@@ -621,6 +701,73 @@ float volumeToGain(uint8_t vol) {
   return t * t;                              // approximates loudness perception
 }
 
+// 0..1 fade multiplier applied on top of the volume gain; reaches 1.0 after AUDIO_FADE_IN_MS.
+float audioFadeScale() {
+  if (!audioFadingIn) return 1.0f;
+  uint32_t elapsed = millis() - audioFadeStart;
+  if (elapsed >= AUDIO_FADE_IN_MS) {
+    audioFadingIn = false;
+    return 1.0f;
+  }
+  return (float)elapsed / (float)AUDIO_FADE_IN_MS;
+}
+
+void applyGain() {
+  if (out != nullptr) {
+    out->SetGain(volumeToGain(volume) * audioFadeScale());
+  }
+}
+
+// Non-blocking tap of the IP5310 KEY line to prevent its low-load auto-shutdown while the ESP32 is awake.
+void updateKeepAlive() {
+  if (!IP5310_KEEPALIVE_ENABLED) return;
+
+  uint32_t now = millis();
+  if (keyPulseActive) {
+    if (now - keyPulseStart >= IP5310_KEEPALIVE_PULSE_MS) {
+      digitalWrite(IP5310_KEY, LOW);
+      keyPulseActive = false;
+    }
+    return;
+  }
+
+  // Playback's own current keeps the bank awake, so only tap when idle.
+  if (isPlaying) {
+    lastKeepAlive = now;
+    return;
+  }
+
+  if (now - lastKeepAlive >= IP5310_KEEPALIVE_INTERVAL) {
+    lastKeepAlive = now;
+    keyPulseStart = now;
+    keyPulseActive = true;
+    digitalWrite(IP5310_KEY, HIGH);  // transistor pulls KEY to GND = simulated short tap
+  }
+}
+
+// Hold the encoder button for LONG_PRESS_MS to force an immediate power-off (deep sleep + bank auto-off).
+void handlePowerButton() {
+  bool pressed = (digitalRead(ENCODER_SW) == LOW);
+  uint32_t now = millis();
+
+  if (pressed) {
+    lastActivity = now;
+    if (!buttonWasPressed) {
+      buttonWasPressed = true;
+      buttonPressStart = now;
+    } else if (now - buttonPressStart >= LONG_PRESS_MS) {
+      Serial.println("Long press: powering off.");
+      if (isPlaying) stopPlayback();
+      // Wait for release so ext0 (wake-on-LOW) doesn't immediately wake us again.
+      while (digitalRead(ENCODER_SW) == LOW) delay(10);
+      delay(50);
+      enterDeepSleep();
+    }
+  } else {
+    buttonWasPressed = false;
+  }
+}
+
 void handleEncoder() {
   int clkState = digitalRead(ENCODER_CLK);
 
@@ -638,7 +785,7 @@ void handleEncoder() {
       }
 
       if (out != nullptr) {
-        out->SetGain(volumeToGain(volume));
+        applyGain();
       }
 
       Serial.print("Volume: ");
@@ -653,13 +800,31 @@ void handleEncoder() {
 // SETUP
 // ============================================================
 
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-
-  // Motor
+// Drive every actuator to its safe/off state; safe to call on any (re)boot.
+void forceOutputsSafe() {
   pinMode(MOTOR_PIN, OUTPUT);
-  digitalWrite(MOTOR_PIN, LOW);
+  digitalWrite(MOTOR_PIN, LOW);   // motor off (before PWM re-attaches)
+  pinMode(AMP_SD, OUTPUT);
+  digitalWrite(AMP_SD, LOW);      // amp muted (no turn-on pop)
+  pinMode(IP5310_KEY, OUTPUT);
+  digitalWrite(IP5310_KEY, LOW);  // don't tap KEY until we're stable
+}
+
+void setup() {
+  // Put actuators in their safe state first, so a brown-out/charger-glitch reset can't leave
+  // the amp, motor, or KEY tap spuriously driven during the transient.
+  forceOutputsSafe();
+
+  // Ride through the brief 5 V dips seen when the charger is plugged/unplugged into the IP5310.
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
+  Serial.begin(115200);
+  delay(500);  // let the rail settle after a power-transient reset
+
+  // Motor (PWM for soft-start)
+  ledcSetup(MOTOR_PWM_CHANNEL, MOTOR_PWM_FREQ, MOTOR_PWM_RES);
+  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CHANNEL);
+  ledcWrite(MOTOR_PWM_CHANNEL, 0);
 
   // Encoder
   pinMode(ENCODER_CLK, INPUT_PULLUP);
@@ -713,6 +878,7 @@ void setup() {
   // Initial LED state
   setLEDMode(LED_STANDBY);
   lastActivity = millis();
+  lastKeepAlive = millis();
 
   Serial.println("System ready.");
 }
@@ -817,6 +983,11 @@ void loop() {
   }
 
   // Controls & LED Update
+  updateKeepAlive();
+  handlePowerButton();
+  if (audioFadingIn) {
+    applyGain();  // advance the startup volume ramp
+  }
   handleEncoder();
   updateLEDs();
 
@@ -827,3 +998,6 @@ void loop() {
 
   delay(1);
 }
+
+
+
