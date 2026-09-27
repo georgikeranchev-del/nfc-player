@@ -5,8 +5,11 @@
 #include <Adafruit_PN532.h>
 #include <FastLED.h>
 #include "driver/rtc_io.h"
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_arduino_version.h"
+#include "freertos/queue.h"
+#include <new>
 
 #include "AudioFileSourceSD.h"
 #include "AudioFileSourceBuffer.h"
@@ -40,7 +43,7 @@
 #define LED_PIN     21
 #define NUM_LEDS    24
 
-#define AMP_SD      2    // MAX98357A SD: HIGH = amp on (9 dB), LOW = shutdown (mute, anti-pop)
+#define AMP_SD      2    // SD_MODE controls shutdown/channel selection; GAIN is separate.
 #define IP5310_KEY  17   // drives a transistor that taps the IP5310 KEY pin to keep it awake
 
 // ============================================================
@@ -57,10 +60,10 @@ const bool IP5310_KEEPALIVE_ENABLED = true;
 const uint32_t IP5310_KEEPALIVE_INTERVAL = 20000;  // < ~30 s bank dropout, with margin
 const uint16_t IP5310_KEEPALIVE_PULSE_MS = 120;
 
-const uint32_t LONG_PRESS_MS = 1500;  // hold the encoder button this long to force power-off
+const uint32_t LONG_PRESS_MS = 1500;
+const uint32_t BUTTON_DEBOUNCE_MS = 40;
 
-const uint32_t NFC_SCAN_IDLE = 150;
-const uint32_t NFC_SCAN_PLAYING = 200;
+const uint32_t NFC_SCAN_INTERVAL = 150;
 const uint8_t NFC_MISSING_LIMIT = 2;
 
 const uint32_t IDLE_SLEEP_TIMEOUT = 5UL * 60UL * 1000UL;  // deep sleep after 5 min of inactivity
@@ -73,15 +76,20 @@ const uint8_t MAX_VOLUME = 21;
 // MOTOR SOFT-START (PWM)
 // ============================================================
 
-// Ramp the motor with PWM so the IP5310 doesn't see the full stall/inrush current at once.
+// PWM is open-loop; the ramp does not impose a measured current limit.
 const uint8_t MOTOR_PWM_CHANNEL = 0;
 const uint32_t MOTOR_PWM_FREQ = 20000;   // 20 kHz: above hearing range, silent switching
 const uint8_t MOTOR_PWM_RES = 8;         // 8-bit duty (0..255)
 const uint8_t MOTOR_DUTY_MAX = 255;      // absolute ceiling
 const uint8_t MOTOR_RUN_DUTY = 230;      // steady turntable speed -- tune this to hit ~33 1/3 RPM
-const uint8_t MOTOR_DUTY_MIN = 60;       // minimum duty that reliably overcomes stall friction
+const uint8_t MOTOR_DUTY_MIN = 60;
 const uint32_t MOTOR_SOFT_START_MS = 600; // ramp duration; also the head-start before audio
 const uint16_t MOTOR_RAMP_STEP_MS = 15;   // time between ramp steps
+
+static_assert(MOTOR_DUTY_MIN <= MOTOR_RUN_DUTY && MOTOR_RUN_DUTY <= MOTOR_DUTY_MAX,
+              "Motor duty must satisfy MIN <= RUN <= MAX");
+static_assert(MOTOR_SOFT_START_MS > 0 && AUDIO_FADE_IN_MS > 0,
+              "Ramp durations must be positive");
 
 // ============================================================
 // LED SETTINGS
@@ -190,16 +198,22 @@ AudioOutputI2S *out = nullptr;
 
 char currentUID[15] = "";
 char playingFile[40] = "";
-volatile bool isPlaying = false;
+bool isPlaying = false;
+bool playbackPending = false;
+bool systemReady = false;
+bool shutdownPending = false;
+uint32_t motorRampStart = 0;
+uint32_t lastMotorUpdate = 0;
 uint8_t loopCount = 0;
 uint8_t volume = INITIAL_VOLUME;
 uint32_t audioFadeStart = 0;
 bool audioFadingIn = false;
 uint32_t lastKeepAlive = 0;
-uint32_t keyPulseStart = 0;
-bool keyPulseActive = false;
+esp_timer_handle_t keyReleaseTimer = nullptr;
 uint32_t buttonPressStart = 0;
-bool buttonWasPressed = false;
+uint32_t buttonChangedAt = 0;
+bool buttonRawPressed = false;
+bool buttonStablePressed = false;
 int lastClkState = HIGH;
 uint32_t lastEncoderTurn = 0;
 uint32_t lastActivity = 0;
@@ -208,14 +222,11 @@ uint32_t lastActivity = 0;
 // NFC TASK GLOBALS
 // ============================================================
 
-volatile bool nfcTaskRunning = true;
-volatile bool nfcTagDetected = false;
-volatile bool nfcTagRemoved = false;
-char nfcUID[15] = "";
-uint8_t missingReads = 0;
+struct NFCPresence {
+  char uid[15];
+};
 
-TaskHandle_t nfcTaskHandle = nullptr;
-SemaphoreHandle_t nfcMutex = nullptr;
+QueueHandle_t nfcQueue = nullptr;
 
 // ============================================================
 // LED HELPERS
@@ -471,6 +482,7 @@ void updateLEDStopping() {
 }
 
 void updateLEDs() {
+  if (playbackPending || shutdownPending) return;
   uint32_t now = millis();
   if (now - lastLEDUpdate < LED_UPDATE_INTERVAL) {
     return;
@@ -497,31 +509,46 @@ void updateLEDs() {
 // SYSTEM CONTROLS
 // ============================================================
 
-void motorOff() {
-  ledcWrite(MOTOR_PWM_CHANNEL, 0);
+void writeMotorDuty(uint8_t duty) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(MOTOR_PIN, duty);
+#else
+  ledcWrite(MOTOR_PWM_CHANNEL, duty);
+#endif
 }
 
-// Gradually raise the PWM duty from stall-break level to the run duty so the supply current rises slowly.
+bool setupMotorPWM() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  if (!ledcAttach(MOTOR_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_RES)) return false;
+#else
+  if (ledcSetup(MOTOR_PWM_CHANNEL, MOTOR_PWM_FREQ, MOTOR_PWM_RES) == 0) return false;
+  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CHANNEL);
+#endif
+  writeMotorDuty(0);
+  return true;
+}
+
+void motorOff() {
+  writeMotorDuty(0);
+}
+
 void softStartMotor() {
   Serial.println("Soft-starting motor...");
-  ledcWrite(MOTOR_PWM_CHANNEL, MOTOR_DUTY_MIN);
-
-  uint32_t start = millis();
-  uint32_t elapsed = 0;
-  while (elapsed < MOTOR_SOFT_START_MS) {
-    uint8_t duty = map(elapsed, 0, MOTOR_SOFT_START_MS, MOTOR_DUTY_MIN, MOTOR_RUN_DUTY);
-    ledcWrite(MOTOR_PWM_CHANNEL, duty);
-    delay(MOTOR_RAMP_STEP_MS);
-    elapsed = millis() - start;
-  }
-
-  ledcWrite(MOTOR_PWM_CHANNEL, MOTOR_RUN_DUTY);  // hold turntable speed
+  motorRampStart = millis();
+  lastMotorUpdate = motorRampStart;
+  playbackPending = true;
+  writeMotorDuty(MOTOR_DUTY_MIN);
 }
 
 void stopPlayback() {
   Serial.println("Stopping playback...");
 
-  digitalWrite(AMP_SD, LOW);  // mute the amp first so stopping mid-stream doesn't pop
+  digitalWrite(AMP_SD, LOW);
+  motorOff();
+  playbackPending = false;
+  isPlaying = false;
+  audioFadingIn = false;
+  if (out != nullptr) out->SetGain(0.0f);
 
   if (mp3 != nullptr) {
     if (mp3->isRunning()) {
@@ -542,17 +569,22 @@ void stopPlayback() {
     file = nullptr;
   }
 
-  motorOff();
-  isPlaying = false;
-  audioFadingIn = false;
   Serial.println("Playback stopped.");
+}
+
+void releaseKey(void *parameter) {
+  digitalWrite(IP5310_KEY, LOW);
+}
+
+void stopKeepAlive() {
+  if (keyReleaseTimer != nullptr) esp_timer_stop(keyReleaseTimer);
+  digitalWrite(IP5310_KEY, LOW);
 }
 
 void enterDeepSleep() {
   Serial.println("Entering deep sleep...");
-  motorOff();
-  digitalWrite(AMP_SD, LOW);
-  digitalWrite(IP5310_KEY, LOW);  // stop tapping KEY so the bank's auto-shutdown can power us off
+  stopKeepAlive();
+  stopPlayback();
   clearLEDs();
   delay(200);
 
@@ -571,7 +603,7 @@ bool readNFCUID(char *uid, size_t uidSize) {
 
   bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uidBuffer, &uidLength, 50);
 
-  if (!success || uidLength == 0 || uidLength > 7) {
+  if (!success || uidLength == 0 || uidLength > 7 || uidSize < uidLength * 2U + 1U) {
     return false;
   }
 
@@ -599,95 +631,73 @@ bool playTrack(const char *filename) {
     return false;
   }
 
-  // Spin the motor up on its own first so its inrush doesn't coincide with audio startup.
-  // Dim the ring during the ramp so the motor gets the supply's full current headroom.
-  FastLED.setBrightness(LED_BRIGHTNESS_MIN);
-  FastLED.show();
+  clearLEDs();
   softStartMotor();
+  return true;
+}
 
-  // Restart the LED startup ramp now that the motor is up, so their current rises stay staggered.
-  ledModeStart = millis();
-
-  file = new AudioFileSourceSD(playingFile);
-  audioBuffer = new AudioFileSourceBuffer(file, AUDIO_BUFFER_SIZE);
-  mp3 = new AudioGeneratorMP3();
-
-  if (!mp3->begin(audioBuffer, out)) {
-    Serial.println("MP3 begin failed.");
-    stopPlayback();
-    return false;
+void updatePlaybackStartup() {
+  if (!playbackPending) return;
+  uint32_t now = millis();
+  uint32_t elapsed = now - motorRampStart;
+  if (elapsed < MOTOR_SOFT_START_MS) {
+    if (now - lastMotorUpdate >= MOTOR_RAMP_STEP_MS) {
+      lastMotorUpdate = now;
+      writeMotorDuty(static_cast<uint8_t>(map(elapsed, 0, MOTOR_SOFT_START_MS, MOTOR_DUTY_MIN, MOTOR_RUN_DUTY)));
+    }
+    return;
   }
 
-  out->SetGain(0.0f);        // start silent so un-muting the amp doesn't pop
-  digitalWrite(AMP_SD, HIGH); // wake the amp; loop() ramps volume up from here
+  playbackPending = false;
+  writeMotorDuty(MOTOR_RUN_DUTY);
+  out->SetGain(0.0f);
+  file = new (std::nothrow) AudioFileSourceSD(playingFile);
+  if (file != nullptr) audioBuffer = new (std::nothrow) AudioFileSourceBuffer(file, AUDIO_BUFFER_SIZE);
+  if (audioBuffer != nullptr) mp3 = new (std::nothrow) AudioGeneratorMP3();
+
+  if (mp3 == nullptr || !mp3->begin(audioBuffer, out)) {
+    Serial.println("MP3 begin failed.");
+    stopPlayback();
+    setLEDMode(LED_STANDBY);
+    return;
+  }
+
+  setLEDMode(LED_STARTING);
+  digitalWrite(AMP_SD, HIGH);
   isPlaying = true;
   audioFadeStart = millis();
   audioFadingIn = true;
   Serial.println("MP3 playback started.");
-  return true;
 }
 
 // ============================================================
 // NFC TASK
 // ============================================================
 
-// Update the active UID under the mutex (owned by loop(), read by nfcTask on core 0).
-void setCurrentUID(const char *uid) {
-  if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
-    strncpy(currentUID, uid, sizeof(currentUID) - 1);
-    currentUID[sizeof(currentUID) - 1] = '\0';
-    xSemaphoreGive(nfcMutex);
-  }
-}
-
 void nfcTask(void *parameter) {
   Serial.println("NFC task started on Core 0.");
+  NFCPresence presence = {};
+  uint8_t missingReads = 0;
 
-  while (nfcTaskRunning) {
+  for (;;) {
     char detectedUID[15] = "";
-
-    // Snapshot the active UID under the mutex to avoid a cross-core data race.
-    char activeUID[15] = "";
-    if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
-      strncpy(activeUID, currentUID, sizeof(activeUID) - 1);
-      activeUID[sizeof(activeUID) - 1] = '\0';
-      xSemaphoreGive(nfcMutex);
-    }
-
     if (readNFCUID(detectedUID, sizeof(detectedUID))) {
       missingReads = 0;
-
-      if (activeUID[0] == '\0' || strcmp(detectedUID, activeUID) != 0) {
-        Serial.print("NFC detected: ");
-        Serial.println(detectedUID);
-
-        if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
-          strncpy(nfcUID, detectedUID, sizeof(nfcUID) - 1);
-          nfcUID[sizeof(nfcUID) - 1] = '\0';
-          nfcTagDetected = true;
-          xSemaphoreGive(nfcMutex);
-        }
+      if (strcmp(detectedUID, presence.uid) != 0) {
+        strncpy(presence.uid, detectedUID, sizeof(presence.uid) - 1);
+        presence.uid[sizeof(presence.uid) - 1] = '\0';
+        xQueueOverwrite(nfcQueue, &presence);
       }
-    } else {
-      if (activeUID[0] != '\0') {
-        missingReads++;
-
-        if (missingReads >= NFC_MISSING_LIMIT) {
-          Serial.println("NFC tag removed.");
-
-          if (xSemaphoreTake(nfcMutex, portMAX_DELAY) == pdTRUE) {
-            nfcTagRemoved = true;
-            xSemaphoreGive(nfcMutex);
-          }
-          missingReads = 0;
-        }
+    } else if (presence.uid[0] != '\0') {
+      if (++missingReads >= NFC_MISSING_LIMIT) {
+        presence.uid[0] = '\0';
+        missingReads = 0;
+        xQueueOverwrite(nfcQueue, &presence);
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(isPlaying ? NFC_SCAN_PLAYING : NFC_SCAN_IDLE));
+    vTaskDelay(pdMS_TO_TICKS(NFC_SCAN_INTERVAL));
   }
-
-  vTaskDelete(nullptr);
 }
 
 // ============================================================
@@ -718,53 +728,47 @@ void applyGain() {
   }
 }
 
-// Non-blocking tap of the IP5310 KEY line to prevent its low-load auto-shutdown while the ESP32 is awake.
 void updateKeepAlive() {
-  if (!IP5310_KEEPALIVE_ENABLED) return;
+  if (!IP5310_KEEPALIVE_ENABLED || shutdownPending || keyReleaseTimer == nullptr) return;
 
   uint32_t now = millis();
-  if (keyPulseActive) {
-    if (now - keyPulseStart >= IP5310_KEEPALIVE_PULSE_MS) {
-      digitalWrite(IP5310_KEY, LOW);
-      keyPulseActive = false;
-    }
-    return;
-  }
-
-  // Playback's own current keeps the bank awake, so only tap when idle.
-  if (isPlaying) {
-    lastKeepAlive = now;
-    return;
-  }
+  if (esp_timer_is_active(keyReleaseTimer)) return;
 
   if (now - lastKeepAlive >= IP5310_KEEPALIVE_INTERVAL) {
     lastKeepAlive = now;
-    keyPulseStart = now;
-    keyPulseActive = true;
-    digitalWrite(IP5310_KEY, HIGH);  // transistor pulls KEY to GND = simulated short tap
+    digitalWrite(IP5310_KEY, HIGH);
+    if (esp_timer_start_once(keyReleaseTimer, (uint64_t)IP5310_KEEPALIVE_PULSE_MS * 1000ULL) != ESP_OK) {
+      digitalWrite(IP5310_KEY, LOW);
+      Serial.println("KEY release timer failed; pulse cancelled.");
+    }
   }
 }
 
-// Hold the encoder button for LONG_PRESS_MS to force an immediate power-off (deep sleep + bank auto-off).
 void handlePowerButton() {
   bool pressed = (digitalRead(ENCODER_SW) == LOW);
   uint32_t now = millis();
-
-  if (pressed) {
-    lastActivity = now;
-    if (!buttonWasPressed) {
-      buttonWasPressed = true;
+  if (pressed != buttonRawPressed) {
+    buttonRawPressed = pressed;
+    buttonChangedAt = now;
+  }
+  if (now - buttonChangedAt < BUTTON_DEBOUNCE_MS) return;
+  if (buttonStablePressed != buttonRawPressed) {
+    buttonStablePressed = buttonRawPressed;
+    if (buttonStablePressed) {
       buttonPressStart = now;
-    } else if (now - buttonPressStart >= LONG_PRESS_MS) {
-      Serial.println("Long press: powering off.");
-      if (isPlaying) stopPlayback();
-      // Wait for release so ext0 (wake-on-LOW) doesn't immediately wake us again.
-      while (digitalRead(ENCODER_SW) == LOW) delay(10);
-      delay(50);
+    } else if (shutdownPending) {
       enterDeepSleep();
     }
-  } else {
-    buttonWasPressed = false;
+  }
+  if (buttonStablePressed) {
+    lastActivity = now;
+    if (!shutdownPending && now - buttonPressStart >= LONG_PRESS_MS) {
+      shutdownPending = true;
+      stopKeepAlive();
+      stopPlayback();
+      clearLEDs();
+      Serial.println("Sleep requested; release encoder button.");
+    }
   }
 }
 
@@ -802,12 +806,12 @@ void handleEncoder() {
 
 // Drive every actuator to its safe/off state; safe to call on any (re)boot.
 void forceOutputsSafe() {
+  digitalWrite(MOTOR_PIN, LOW);
   pinMode(MOTOR_PIN, OUTPUT);
-  digitalWrite(MOTOR_PIN, LOW);   // motor off (before PWM re-attaches)
+  digitalWrite(AMP_SD, LOW);
   pinMode(AMP_SD, OUTPUT);
-  digitalWrite(AMP_SD, LOW);      // amp muted (no turn-on pop)
+  digitalWrite(IP5310_KEY, LOW);
   pinMode(IP5310_KEY, OUTPUT);
-  digitalWrite(IP5310_KEY, LOW);  // don't tap KEY until we're stable
 }
 
 void setup() {
@@ -815,21 +819,23 @@ void setup() {
   // the amp, motor, or KEY tap spuriously driven during the transient.
   forceOutputsSafe();
 
-  // Ride through the brief 5 V dips seen when the charger is plugged/unplugged into the IP5310.
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-
   Serial.begin(115200);
   delay(500);  // let the rail settle after a power-transient reset
+  Serial.printf("Reset reason: %d; wake cause: %d\n",
+                (int)esp_reset_reason(), (int)esp_sleep_get_wakeup_cause());
 
   // Motor (PWM for soft-start)
-  ledcSetup(MOTOR_PWM_CHANNEL, MOTOR_PWM_FREQ, MOTOR_PWM_RES);
-  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CHANNEL);
-  ledcWrite(MOTOR_PWM_CHANNEL, 0);
+  if (!setupMotorPWM()) {
+    Serial.println("Motor PWM initialization failed; restart required.");
+    return;
+  }
 
   // Encoder
+  rtc_gpio_deinit((gpio_num_t)ENCODER_SW);
   pinMode(ENCODER_CLK, INPUT_PULLUP);
   pinMode(ENCODER_DT, INPUT_PULLUP);
   pinMode(ENCODER_SW, INPUT_PULLUP);
+  lastClkState = digitalRead(ENCODER_CLK);
 
   // LEDs
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
@@ -846,6 +852,7 @@ void setup() {
 
   if (!SD.begin(SD_CS, sdSPI, SD_SPEED)) {
     Serial.println("SD card initialization failed!");
+    return;
   } else {
     Serial.println("SD card initialized.");
     if (!SD.exists("/player")) {
@@ -859,26 +866,45 @@ void setup() {
 
   if (!versiondata) {
     Serial.println("Didn't find PN532.");
+    return;
   } else {
     Serial.println("PN532 found.");
-    nfc.SAMConfig();
+    nfc.setPassiveActivationRetries(0x01);
+    if (!nfc.SAMConfig()) {
+      Serial.println("PN532 configuration failed.");
+      return;
+    }
   }
 
   // I2S
-  out = new AudioOutputI2S();
+  out = new (std::nothrow) AudioOutputI2S();
+  if (out == nullptr) {
+    Serial.println("Audio allocation failed.");
+    return;
+  }
   out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  out->SetGain(volumeToGain(volume));
+  out->SetGain(0.0f);
 
-  // FreeRTOS Synchronization
-  nfcMutex = xSemaphoreCreateMutex();
+  esp_timer_create_args_t timerArgs = {};
+  timerArgs.callback = releaseKey;
+  timerArgs.name = "key_release";
+  if (esp_timer_create(&timerArgs, &keyReleaseTimer) != ESP_OK) {
+    Serial.println("KEY timer initialization failed.");
+    return;
+  }
 
-  // NFC task on Core 0
-  xTaskCreatePinnedToCore(nfcTask, "NFC_Task", 4096, nullptr, 1, &nfcTaskHandle, 0);
+  nfcQueue = xQueueCreate(1, sizeof(NFCPresence));
+  if (nfcQueue == nullptr ||
+      xTaskCreatePinnedToCore(nfcTask, "NFC_Task", 4096, nullptr, 1, nullptr, 0) != pdPASS) {
+    Serial.println("NFC task initialization failed.");
+    return;
+  }
 
   // Initial LED state
   setLEDMode(LED_STANDBY);
   lastActivity = millis();
   lastKeepAlive = millis();
+  systemReady = true;
 
   Serial.println("System ready.");
 }
@@ -888,10 +914,41 @@ void setup() {
 // ============================================================
 
 void loop() {
-  // MP3 playback
-  if (isPlaying && mp3 != nullptr && mp3->isRunning()) {
+  if (!systemReady) {
+    delay(10);
+    return;
+  }
+  handlePowerButton();
+  if (shutdownPending) {
+    delay(1);
+    return;
+  }
+  updateKeepAlive();
+
+  NFCPresence presence = {};
+  if (xQueueReceive(nfcQueue, &presence, 0) == pdTRUE) {
     lastActivity = millis();
-    if (!mp3->loop()) {
+    strncpy(currentUID, presence.uid, sizeof(currentUID) - 1);
+    currentUID[sizeof(currentUID) - 1] = '\0';
+    if (currentUID[0] == '\0') {
+      stopPlayback();
+      setLEDMode(LED_STOPPING);
+    } else {
+      char filename[40];
+      snprintf(filename, sizeof(filename), "/player/%s.mp3", currentUID);
+      loopCount = 0;
+      selectRandomPattern();
+      if (!playTrack(filename)) setLEDMode(LED_STANDBY);
+    }
+  }
+
+  updatePlaybackStartup();
+  if (playbackPending) lastActivity = millis();
+
+  // MP3 playback
+  if (isPlaying && mp3 != nullptr) {
+    lastActivity = millis();
+    if (!mp3->isRunning() || !mp3->loop()) {
       Serial.println("Track finished.");
 
       mp3->stop();
@@ -923,68 +980,7 @@ void loop() {
     }
   }
 
-  // NFC new tag
-  bool newTag = false;
-  char newUID[15] = "";
-
-  if (xSemaphoreTake(nfcMutex, 0) == pdTRUE) {
-    if (nfcTagDetected) {
-      strncpy(newUID, nfcUID, sizeof(newUID) - 1);
-      newUID[sizeof(newUID) - 1] = '\0';
-      nfcTagDetected = false;
-      newTag = true;
-    }
-    xSemaphoreGive(nfcMutex);
-  }
-
-  if (newTag) {
-    Serial.print("New NFC tag: ");
-    Serial.println(newUID);
-
-    lastActivity = millis();
-    setCurrentUID(newUID);
-
-    char filename[40];
-    snprintf(filename, sizeof(filename), "/player/%s.mp3", currentUID);
-
-    loopCount = 0;
-
-    selectRandomPattern();
-    setLEDMode(LED_STARTING);
-
-    if (!playTrack(filename)) {
-      Serial.println("Playback failed.");
-      setCurrentUID("");
-      setLEDMode(LED_STANDBY);
-    }
-  }
-
-  // NFC tag removed
-  bool tagRemoved = false;
-
-  if (xSemaphoreTake(nfcMutex, 0) == pdTRUE) {
-    if (nfcTagRemoved) {
-      nfcTagRemoved = false;
-      tagRemoved = true;
-    }
-    xSemaphoreGive(nfcMutex);
-  }
-
-  if (tagRemoved) {
-    Serial.println("Tag removal detected.");
-    setCurrentUID("");
-    lastActivity = millis();
-
-    setLEDMode(LED_STOPPING);
-
-    if (isPlaying) {
-      stopPlayback();
-    }
-  }
-
   // Controls & LED Update
-  updateKeepAlive();
-  handlePowerButton();
   if (audioFadingIn) {
     applyGain();  // advance the startup volume ramp
   }
@@ -992,12 +988,10 @@ void loop() {
   updateLEDs();
 
   // Idle auto-sleep: fires in both cases (tag removed or 3 loops elapsed)
-  if (!isPlaying && (millis() - lastActivity >= IDLE_SLEEP_TIMEOUT)) {
+  if (!isPlaying && !playbackPending && !buttonRawPressed &&
+      !buttonStablePressed && (millis() - lastActivity >= IDLE_SLEEP_TIMEOUT)) {
     enterDeepSleep();
   }
 
   delay(1);
 }
-
-
-
