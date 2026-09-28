@@ -4,6 +4,11 @@ Battery-powered ESP32 DevKit V1 / ESP32-WROOM-32 NFC MP3 player. This folder is
 the new standalone project and the root to upload to GitHub. No repository was
 initialized and no hardware was flashed. Files beside this folder are historical
 references; the older monolithic sketch and KiCad files are not the build inputs.
+Used ESP32:
+Chip type:          ESP32-D0WD-V3 (revision v3.1)
+Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
+Crystal frequency:  40MHz
+MAC:                30:76:f5:a9:dc:78
 
 ## Start here
 
