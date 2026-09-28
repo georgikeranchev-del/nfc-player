@@ -1,0 +1,29 @@
+name: Firmware and Design Checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  design-and-control:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check declared hardware design
+        shell: pwsh
+        run: ./scripts/Check-Design.ps1
+      - name: Test rule failures
+        shell: pwsh
+        run: ./scripts/Test-DesignChecks.ps1
+      - name: Test injected controller
+        shell: pwsh
+        run: ./scripts/Test-Control.ps1
+  arduino:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install reference stack and compile (no upload)
+        shell: pwsh
+        run: ./scripts/Build-Arduino.ps1 -Install

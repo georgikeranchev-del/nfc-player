@@ -1,0 +1,39 @@
+Id,Quantity,Part,Status,Notes
+U_ESP32,1,ESP32 DevKit V1 WROOM-32,keep,Confirm classic WROOM without PSRAM
+U_POWER,1,IP5310 K648 module,keep,Characterize battery startup and KEY behavior
+BAT1,1,1S 18650 cell,verify,Known manufacturer charge/discharge rating and condition required
+PROTECTION,1,Documented 1S PCM or built-in protected cell,select,Choose cell-compatible thresholds and measured current rating
+F1,1,DC fuse and insulated holder,select,Near cell positive; current/time curve selected after measurement
+SW_LOAD,1,DC-rated SPST switch,verify,Use existing switch on LOAD_5V if suitably rated
+U_SD,1,SD breakout and card,keep,Confirm module supply voltage and 3.3V SPI signals
+U_NFC,1,PN532 SPI breakout,keep,Verify power/logic requirements and SPI mode
+U_AMP,1,MAX98357A seven-pin module,keep,SD via AHCT buffer; no speaker terminal to ground
+SPK1,1,Speaker matched to amplifier,verify,Check impedance and power rating
+ENC1,1,Incremental encoder with NO push,keep,GPIO4 push switch remains separate from KEY
+LED1,1,24-pixel WS2812B ring,keep,5V and buffered data
+U_BUFFER,1,SN74AHCT125N DIP-14,buy,One channel LED data and one amp SD; not HC125
+R_LED_DATA,1,330 ohm resistor,keep,Between AHCT output and ring DIN
+R_LED_PD,1,10k resistor,buy,AHCT channel 1 input to ground
+R_AMP_PD,1,10k resistor,buy,AHCT channel 2 input to ground for reset mute
+U_GATE,1,TC4420CPA DIP-8,buy,Non-inverting 5V MOSFET driver; confirm exact package
+R_DRIVER_PD,1,10k resistor,buy,TC4420 input to ground
+Q_MOTOR,1,IRLZ44N TO-220,keep,Gate driven at 5V; tab is drain
+R_GATE,1,100 ohm resistor,keep,Driver output to motor gate
+R_GATE_PD,1,10k resistor,keep,Physically between MOSFET gate and source
+D_MOTOR,1,1N5822 axial Schottky,buy,Motor flyback band toward motor positive; verify current and heat
+M1,1,N20 6V 50RPM motor,keep,Two-wire PWM control; use actual current data
+Q_KEY,1,2N3904 TO-92,verify,Buy only if no working KEY driver; check pin order
+R_KEY_BASE,1,1k resistor,verify,GPIO17 to base
+R_KEY_PD,1,10k resistor,verify,KEY transistor base to emitter
+J_KEY,1,2-pin KEY and GND service connector,buy,Optional momentary NO button can attach here without new enclosure hole now
+C_POWER,1,1000uF electrolytic >=10V,keep,IP5310 output; check polarity and startup inrush
+C_AMP,1,100uF electrolytic >=10V,keep,Local amplifier supply
+C_LED,1,470uF electrolytic >=10V,keep,Local LED supply
+C_MOTOR,1,220uF electrolytic >=10V,keep,Motor supply to ground NOT drain
+C_BYPASS,7,100nF X7R ceramic >=16V,buy,Power output ESP32 amp LED AHCT driver and spare
+C_DRIVER,1,1uF ceramic >=16V,buy,Local TC4420 supply
+C_BRUSH,1,100nF capacitor >=16V,verify,Across motor brushes; identified film part acceptable
+SOCKET8,1,DIP-8 socket,buy,For TC4420
+SOCKET14,1,DIP-14 socket,buy,For AHCT125
+PERFBOARD,1,Perfboard with insulated mounting,buy,Size after physical layout
+WIRING_KIT,1,Rated wire connectors headers heatshrink standoffs,buy,Power-current paths not thin jumper wires or tiny pad chains

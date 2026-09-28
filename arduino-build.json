@@ -1,0 +1,11 @@
+{
+  "board_url":"https://espressif.github.io/arduino-esp32/package_esp32_index.json",
+  "core":"esp32:esp32@2.0.17",
+  "fqbn":"esp32:esp32:esp32doit-devkit-v1",
+  "libraries":[
+    "Adafruit BusIO@1.17.0",
+    "Adafruit PN532@1.3.4",
+    "FastLED@3.9.15",
+    "ESP8266Audio@1.9.7"
+  ]
+}
