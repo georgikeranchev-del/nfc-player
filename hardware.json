@@ -1,6 +1,11 @@
 {
   "schema_version": 1,
-  "board": "ESP32 DevKit V1, ESP32-WROOM-32, no PSRAM",
+  "board": "ESP32 DevKit V1; WROOM module without PSRAM required (board/module unverified)",
+  "chip": {
+    "model": "ESP32-D0WD-V3",
+    "revision": "v3.1",
+    "crystal_mhz": 40
+  },
   "power_mode": "battery-only",
   "components": [
     {"id":"U_ESP32","quantity":1,"signals":[]},

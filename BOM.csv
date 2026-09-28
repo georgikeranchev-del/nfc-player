@@ -1,8 +1,8 @@
 Id,Quantity,Part,Status,Notes
 U_ESP32,1,ESP32 DevKit V1 WROOM-32,keep,Confirm classic WROOM without PSRAM
 U_POWER,1,IP5310 K648 module,keep,Characterize battery startup and KEY behavior
-BAT1,1,1S 18650 cell,verify,Known manufacturer charge/discharge rating and condition required
-PROTECTION,1,Documented 1S PCM or built-in protected cell,select,Choose cell-compatible thresholds and measured current rating
+BAT1,1,1S 18650 Li-ion 3.6/3.7V (4.2V charge),verify,Genuine 2500-3500mAh; prefer >=10A continuous; verify charge-current compatibility; see WIRING.md
+PROTECTION,1,Documented 1S PCM or built-in protected cell,select,Match cell chemistry and charge/discharge limits; allow measured startup current; see WIRING.md
 F1,1,DC fuse and insulated holder,select,Near cell positive; current/time curve selected after measurement
 SW_LOAD,1,DC-rated SPST switch,verify,Use existing switch on LOAD_5V if suitably rated
 U_SD,1,SD breakout and card,keep,Confirm module supply voltage and 3.3V SPI signals

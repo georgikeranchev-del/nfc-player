@@ -67,16 +67,9 @@ regulator and gate driver still draw current. Measure whether the IP5310 actuall
 switches off. If it stays on, encoder wake works but battery consumption remains.
 If it turns off, encoder GPIO4 alone cannot wake it; use the KEY cold-start path.
 
-## Bench acceptance
+## Manual tests
 
-1. Scope LOAD_5V and ESP32 3.3 V at battery start, motor start and sleep/wake.
-   A meter cannot certify short dips. Brownout stays enabled throughout.
-2. Verify output safe states before/during reset with the resistor defaults.
-3. Capture KEY pulses during motor ramp and SD/audio work; no long-held KEY due
-   to loop blocking. Confirm repeated taps are benign on the actual module.
-4. Test tag present at boot, no tag, missing MP3, rapid remove/replace, all repeats,
-   button bounce, long hold and wake while the button is still held.
-5. Wait beyond the boost auto-off interval after sleep. Record actual rail voltages
-   and current, then separately test GPIO4 wake (powered) and KEY wake (off).
-6. If a stage faults, record the log and fix that stage; do not disable brownout or
-   insert unrelated delays to hide supply collapse.
+Test preparation, motor-ramp comparisons, battery-only and no-tag idle/sleep
+checks, and later USB/charging validation are in [MANUAL_TESTS.md](MANUAL_TESTS.md).
+This document describes the intended sequence; test procedures and acceptance
+criteria are maintained in that dedicated guide.

@@ -2,13 +2,13 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $checker = Join-Path $PSScriptRoot 'Check-Design.ps1'
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('nfc-design-checks-' + [guid]::NewGuid().ToString('N'))
-$cases = @('gpio12', 'duplicate', 'unsupported', 'readme', 'bom', 'pulldown', 'strap', 'brownout')
+$cases = @('gpio12', 'duplicate', 'unsupported', 'pinout', 'pinout-owner', 'bom', 'pulldown', 'strap', 'brownout')
 try {
     foreach ($case in $cases) {
         $fixture = Join-Path $temporary $case
         $firmware = Join-Path $fixture 'firmware\nfc_player'
         [void][IO.Directory]::CreateDirectory($firmware)
-        foreach ($file in @('README.md', 'BOM.csv', 'hardware.json')) {
+        foreach ($file in @('PINOUT.md', 'BOM.csv', 'hardware.json')) {
             Copy-Item -LiteralPath (Join-Path $root $file) -Destination $fixture
         }
         $pinsPath = Join-Path $firmware 'pins.h'
@@ -30,11 +30,17 @@ try {
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Unsupported'
             }
-            'readme' {
-                $path = Join-Path $fixture 'README.md'
+            'pinout' {
+                $path = Join-Path $fixture 'PINOUT.md'
                 $text = (Get-Content $path -Raw).Replace('| IP5310_KEY | 17 |', '| IP5310_KEY | 12 |')
                 [IO.File]::WriteAllText($path, $text)
-                $expected = 'README pinout mismatch'
+                $expected = 'PINOUT mismatch'
+            }
+            'pinout-owner' {
+                $path = Join-Path $fixture 'PINOUT.md'
+                $text = (Get-Content $path -Raw).Replace('| IP5310_KEY | 17 | Q_KEY |', '| IP5310_KEY | 17 | U_AMP |')
+                [IO.File]::WriteAllText($path, $text)
+                $expected = 'PINOUT mismatch'
             }
             'bom' {
                 $path = Join-Path $fixture 'BOM.csv'

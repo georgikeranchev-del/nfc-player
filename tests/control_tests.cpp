@@ -131,6 +131,22 @@ int main() {
       rig.step(Config::IDLE_SLEEP_MS);
       require(rig.power.slept && rig.power.disabled && rig.nfc.stopped, "idle sleep stops keepalive and NFC");
     }
+          {
+            Rig rig; rig.boot();
+            uint32_t powerTicks = rig.power.ticks;
+            rig.step(Config::IDLE_SLEEP_MS - 1);
+            require(rig.player.state() == PlayerState::Idle && rig.pwm.duty == 0 && rig.audio.starts == 0,
+              "no-tag idle keeps motor and audio off until the timeout");
+            require(rig.leds.current == LedMode::Standby && !rig.nfc.stopped,
+              "no-tag idle retains standby LEDs and NFC polling");
+            require(rig.power.ticks > powerTicks && !rig.power.disabled,
+              "no-tag idle continues servicing keepalive");
+            rig.step();
+            require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && rig.power.disabled && rig.nfc.stopped,
+              "no-tag timeout sleeps and stops keepalive and NFC");
+            require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off,
+              "no-tag sleep leaves motor audio and LEDs off");
+          }
     {
       Rig rig; rig.boot(); rig.tag("A1"); rig.step(100); rig.tag("");
       rig.step(Config::MOTOR_RAMP_MS);

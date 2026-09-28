@@ -1,9 +1,16 @@
 # Battery-Only Perfboard Wiring
 
 This is the new baseline, superseding contradictory advice in the old chat and
-parent wiring file. Keep the existing ESP32 DevKit V1 (verify WROOM), IP5310/K648,
+parent wiring file. Keep the existing classic ESP32 development board, IP5310/K648,
 PN532, SD module, MAX98357A, ring, N20 motor and encoder. Reuse their existing
 capacitors if identified and undamaged. No TP4056/alternative boost is required.
+
+Reported silicon is **ESP32-D0WD-V3, revision v3.1, with a 40 MHz crystal**.
+This does not confirm the development-board/module model or PSRAM. WROOM without
+PSRAM is the working assumption from the reported earlier check, not a verified
+module identity. Use [PINOUT.md](PINOUT.md) for the complete GPIO table, GPIO16/17
+restrictions and compact connection schematic. Full reported chip details are in
+[README.md](README.md#detected-esp32).
 
 ## What to buy
 
@@ -64,6 +71,54 @@ For battery-only development omit the former series rail diode. Route IP5310
 output straight through the load switch to the star. Do not put motor/amp current
 through the ESP32 headers, skinny daisy-chain jumpers or long perfboard solder
 tracks. Use short power wires and pair each signal with a nearby return path.
+
+### 18650 selection
+
+**A single suitable 18650 is a reasonable choice**, subject to the measured load
+and the actual K648 charging configuration. "18650" describes the cell size, not
+its chemistry, current capability or protection. Keep this a 1S design: do not
+connect two cells in series or improvise a parallel pack to cure startup faults.
+
+| Parameter | What to look for |
+|---|---|
+| Chemistry/voltage | Conventional rechargeable Li-ion, nominal 3.6/3.7 V, charged to 4.20 V. Verify K648 is configured for that cell. LiFePO4 or a different charge-voltage chemistry is not a drop-in substitute. |
+| Capacity | Genuine 2500-3500 mAh is a practical shopping range; around 3000 mAh is a useful starting point. Capacity mainly determines runtime, not whether motor startup succeeds. |
+| Discharge rating | Prefer a documented continuous discharge rating of at least 10 A as a shopping target with margin; ignore unqualified "pulse/max" marketing. Final suitability depends on measured current, sag and temperature. This is not a 10 A fuse recommendation or an IP5310 output rating. |
+| Charge rating | Check the cell's recommended and maximum charge current separately from its discharge rating. The actual K648 cell-charging current must comply; USB input current is not the same measurement. If incompatible, reconfigure only by the module's documented method or select a compatible cell before charging. |
+| Protection | Use a documented protected cell/pack OR a suitable external 1S PCM. Its charge/discharge limits, trip thresholds and wiring must suit the cell and measured startup current. A high-current bare cell behind a low-current protection board is still limited by that board. |
+| Construction | Buy from a reputable battery supplier with a manufacturer datasheet and traceable model. Reject damaged wraps/positive-terminal insulators, dents and unknown salvaged cells. Avoid implausible capacity claims. |
+| Fit/connections | Protected/button-top cells may be longer than a bare 65 mm cell. Check the exact holder dimensions and contact-current rating. Use a rated holder or professionally assembled pack with welded tabs/leads; do not solder directly to the cell. |
+| Temperature/voltage limits | Follow the cell datasheet's operating and charging temperatures and minimum voltage. Choose an operating cutoff with sag margin above the minimum/protection trip. Supervise development charging; do not assume the module has cell-temperature sensing. |
+
+A higher-current cell does not force current into the load, but it can deliver
+more current into a fault: protection, a correctly coordinated fuse and insulated
+connections remain necessary. It cannot increase the IP5310 module's own output
+capability. A healthy existing cell that meets the measured requirements need
+not be replaced just to obtain a larger mAh number.
+
+Size the battery path from battery current, not the 5 V current. Approximately:
+
+$$
+I_{cell} \approx \frac{V_{load} I_{load}}{V_{cell} \eta}
+$$
+
+For example, a 5.1 V load drawing 2 A needs about **3.75 A from a 3.2 V cell** at
+an assumed 85% boost efficiency, before allowing for transients. These are sizing
+examples, not measured load/efficiency or a recommended discharge endpoint. Check
+startup at the lowest intended battery level: the same output power needs more
+battery current as voltage falls.
+
+For a first runtime estimate:
+
+$$
+t_{hours} \approx \frac{V_{nominal} C_{Ah} \eta}{P_{load,average}}
+$$
+
+A 3.6 V, 3000 mAh cell contains nominally 10.8 Wh. At an assumed 85% efficiency,
+that gives roughly **1.8 hours at 5.1 V / 1 A average load**, or **0.9 hours at
+2 A**. Usable capacity, cutoff, motor/audio peaks, temperature and cell condition
+can reduce this. Measure average power with representative music and lighting;
+do not treat the full labelled capacity as mAh available at 5 V.
 
 ## Motor: driven gate, low-side switching
 
@@ -140,10 +195,8 @@ The transistor emulates a tap while ESP32 is running. It cannot initiate its own
 cold boot. Never connect KEY directly to GPIO4/17. Retain your already-tested
 2N7000 circuit instead if fitted; do not build both driver alternatives.
 
-Measure KEY open voltage and tap/hold/double-tap behavior with a high-impedance
-meter/scope. Do not measure pull-up current by putting an ammeter straight across
-unidentified terminals. For a source-resistance estimate use a known high-value
-resistor, reduce cautiously only after verifying voltages and dissipation.
+The KEY voltage and press-characterization procedure is in
+[MANUAL_TESTS.md](MANUAL_TESTS.md#key-characterization).
 
 Keep the encoder and KEY on separate headers during bring-up. See the one-control
 decision in [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md); no unmeasured isolation
@@ -151,7 +204,7 @@ circuit is described as solder-ready.
 
 ## SD, PN532 and decoupling
 
-Use the README pin map. PN532 must be set to SPI. Confirm each breakout's allowed
+Use [PINOUT.md](PINOUT.md). PN532 must be set to SPI. Confirm each breakout's allowed
 power voltage and 3.3 V logic levels; a module labelled 5V may have an onboard
 regulator, while a bare SD/PN532 device cannot simply take 5 V. Supply these
 modules only according to their own schematic, not from the general 5 V list.
@@ -173,32 +226,19 @@ and can worsen inrush. Do not keep increasing them without waveforms.
 
 ## Perfboard assembly and acceptance
 
-1. Place modules/socket footprints on a 200 x 150 mm cardboard layout including
-   mounting holes, motor/belt plane, speaker, battery and wire clearance. Keep
-   PN532 antenna away from metal/battery/motor; test tag reading through the lid.
-2. Build only protected battery/IP5310/switch/star distribution first. Check
-   polarity, shorts and unloaded output before fitting expensive boards.
-3. Test boost with a known dummy load and KEY. Stable 5 V must exist without any
-   ESP32 firmware. Reject excess voltage, unexpected cycling or heat.
-4. Socket and add ESP32, then SD/PN532, then AHCT/LED/amp with motor disconnected.
-   Never change wiring live. For programming disconnect the player harness from
-   ESP32 and use its USB alone, then remove USB before reconnecting battery wiring.
-5. Add driver/flyback/motor last. First test without belt, then with the final
-   platter. Keep amp muted/LEDs black during the ramp as firmware does.
-6. Confirm every reset leaves gate LOW, amp off and KEY released. Measure 5 V,
-   3.3 V, battery current and motor voltage at start. No extended stall tests.
-7. Measure sleep current and wake behavior both before and after actual IP5310
-   shutdown. Only then choose one-control hardware or fit the fallback KEY button.
-8. Put strain relief, insulation and standoffs in before enclosure testing. Leave
-   a service connector for KEY and access to the fuse/switch. Do not rely on loose
-   breadboard contacts or perfboard pad islands for multi-amp return paths.
+Follow the staged assembly/acceptance checklist in
+[MANUAL_TESTS.md](MANUAL_TESTS.md#perfboard-assembly-and-acceptance). That guide
+also owns the battery-only test matrix, motor-ramp comparison, measurement log
+fields and later charging/dual-USB gates. Those procedures are not recorded
+hardware passes or authorization to connect unverified supplies.
 
 ## Platter tuning
 
 Keep the existing N20. Start with near-equal pulleys around 20 mm effective belt
 diameter so an 8 mm spindle bore has adequate wall material. About 50 mm shaft
 spacing with a slotted motor mount is a reasonable layout trial, not a speed
-setting. Count 10 revolutions (~18 s for 33 1/3 RPM); adjust MOTOR_RUN_DUTY in
-config.h by about 5 counts per trial. Full-duty too slow means revise friction/
-ratio rather than increasing voltage. Keep the platter balanced, not arbitrarily
-heavy. Use a smooth 8 mm bearing seat and don't clamp the 608ZZ's two races together.
+setting. Keep the platter balanced, not arbitrarily heavy. Use a smooth 8 mm
+bearing seat and don't clamp the 608ZZ's two races together.
+
+Measure and adjust speed using
+[MANUAL_TESTS.md](MANUAL_TESTS.md#platter-speed-check).

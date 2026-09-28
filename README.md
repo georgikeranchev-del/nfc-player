@@ -1,23 +1,40 @@
 # NFC Vinyl Player
 
-Battery-powered ESP32 DevKit V1 / ESP32-WROOM-32 NFC MP3 player. This folder is
+Battery-powered classic ESP32 NFC MP3 player. This folder is
 the new standalone project and the root to upload to GitHub. No repository was
 initialized and no hardware was flashed. Files beside this folder are historical
 references; the older monolithic sketch and KiCad files are not the build inputs.
-Used ESP32:
-Chip type:          ESP32-D0WD-V3 (revision v3.1)
-Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
-Crystal frequency:  40MHz
-MAC:                30:76:f5:a9:dc:78
+
+## Detected ESP32
+
+User-reported detection output:
+
+| Property | Reported value |
+|---|---|
+| Chip | ESP32-D0WD-V3 |
+| Revision | v3.1 |
+| Features | Wi-Fi, Bluetooth, dual core + low-power coprocessor, 240 MHz |
+| eFuse | Vref calibration; coding scheme None |
+| Crystal | 40 MHz |
+| MAC | `30:76:f5:a9:dc:78` |
+
+This confirms classic ESP32 silicon, not the development-board/module model,
+flash size or PSRAM configuration. The wiring/build baseline still assumes a
+DOIT ESP32 DEVKIT V1 with a WROOM module without PSRAM. You recall no PSRAM on an
+earlier check, but no identifying module marking is available. GPIO16/17 must be
+free of PSRAM use; see [PINOUT.md](PINOUT.md). The chip report alone does not
+require a firmware or pin-map change.
 
 ## Start here
 
-1. Read [WIRING.md](WIRING.md) before soldering. It specifies the battery-only
-   baseline, through-hole parts, amplifier buffer and motor gate driver.
+1. Use [PINOUT.md](PINOUT.md) for the single GPIO table and connection overview.
+   Read [WIRING.md](WIRING.md) before soldering for power distribution, protection,
+   through-hole parts, amplifier buffer and motor gate driver.
 2. Shop from [BOM.csv](BOM.csv). `buy`, `keep`, `verify`, `select` and `fallback`
    are different decisions; do not buy an arbitrary protection board/fuse rating.
 3. Follow [POWER_SEQUENCE.md](POWER_SEQUENCE.md) for cold-start versus powered
-   sleep, including the timing limits. Motor/audio require an NFC tag.
+   sleep, including the timing limits. Use [MANUAL_TESTS.md](MANUAL_TESTS.md) for
+   all manual hardware tests. Motor/audio require an NFC tag.
 4. Review [KNOWN_ISSUES.md](KNOWN_ISSUES.md). This is not an electrically certified
    schematic. Do not order a PCB from the old KiCad files.
 
@@ -45,37 +62,32 @@ three plays, 600 ms motor ramp, 1 s audio fade, 5-minute idle sleep, 1.5 s encod
 hold then release to sleep. A held wake button must first be released to arm a
 new long press. Brownout protection is NOT disabled.
 
+## No-tag idle and USB
+
+After successful initialization with no tag, motor PWM stays at zero and the
+amplifier stays in shutdown. The LED ring shows its dim standby animation, NFC
+polling continues, and KEY keep-alive requests continue every 20 s while awake.
+This is lower-load operation, not zero current or disconnected peripheral power.
+After five minutes without activity, the firmware sleeps and stops keep-alive;
+whether IP5310 subsequently shuts down depends on actual standby current.
+
+The firmware has no separate USB mode that disables idle sleep. **No tag does
+not make simultaneous boost VIN and DevKit USB safe.** For programming, disconnect
+the complete player harness, including GPIOs, and use DevKit USB alone. With SD
+and PN532 disconnected the player may report an initialization fault; that is
+not normal ready/idle operation, but it does not prevent programming.
+
+K648 charging USB is a different power path from DevKit programming USB. Charging
+while playing, isolated programming while charging, and fully wired dual-USB use
+have separate tests and prerequisites in
+[MANUAL_TESTS.md](MANUAL_TESTS.md#later-usb-and-charging-tests).
+
 ## Pinout
 
-This table is checked against `pins.h` and `hardware.json`. Edit all three when
-deliberately changing wiring. Symbolic `constexpr` pins replace the old `#define`s.
-
-<!-- PINOUT:BEGIN -->
-| Symbol | GPIO | Component |
-|---|---|---|
-| SD_CS | 13 | U_SD |
-| SD_SCK | 14 | U_SD |
-| SD_MISO | 16 | U_SD |
-| SD_MOSI | 15 | U_SD |
-| PN532_SS | 5 | U_NFC |
-| PN532_SCK | 18 | U_NFC |
-| PN532_MISO | 19 | U_NFC |
-| PN532_MOSI | 23 | U_NFC |
-| MOTOR_GATE | 27 | U_GATE |
-| I2S_LRC | 25 | U_AMP |
-| I2S_BCLK | 26 | U_AMP |
-| I2S_DOUT | 22 | U_AMP |
-| ENCODER_CLK | 32 | ENC1 |
-| ENCODER_DT | 33 | ENC1 |
-| ENCODER_SW | 4 | ENC1 |
-| LED_DATA | 21 | U_BUFFER |
-| AMP_ENABLE | 2 | U_BUFFER |
-| IP5310_KEY | 17 | Q_KEY |
-<!-- PINOUT:END -->
-
-GPIO12 and flash GPIO6-11 are forbidden. Existing straps 2, 5 and 15 are explicitly
-reviewed in [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md); this is not a claim that
-all boot pins are interchangeable. GPIO16/17 require a WROOM board without PSRAM.
+The checked table and compact schematic live in [PINOUT.md](PINOUT.md), including
+the buffered LED/amplifier routes, motor driver, KEY transistor and boot-pin
+conditions. It is checked against [firmware/nfc_player/pins.h](firmware/nfc_player/pins.h)
+and [hardware.json](hardware.json); edit all three when changing GPIO assignments.
 
 ## Build and checks
 

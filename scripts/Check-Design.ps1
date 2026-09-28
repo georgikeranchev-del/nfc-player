@@ -39,19 +39,19 @@ foreach ($strap in @(0, 2, 5, 15)) {
         if ($review.Count -ne 1) { throw "Missing explicit boot-strap review for GPIO$strap" }
     }
 }
-$readme = Get-Content -LiteralPath (Join-Path $Root 'README.md') -Raw
-$table = [regex]::Match($readme, '(?s)<!-- PINOUT:BEGIN -->(.*?)<!-- PINOUT:END -->')
-if (-not $table.Success) { throw 'README pinout markers missing.' }
+$pinout = Get-Content -LiteralPath (Join-Path $Root 'PINOUT.md') -Raw
+$table = [regex]::Match($pinout, '(?s)<!-- PINOUT:BEGIN -->(.*?)<!-- PINOUT:END -->')
+if (-not $table.Success) { throw 'PINOUT table markers missing.' }
 $documented = @{}
-foreach ($row in [regex]::Matches($table.Groups[1].Value, '(?m)^\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\w+)\s*\|\s*$')) {
+foreach ($row in [regex]::Matches($table.Groups[1].Value, '(?m)^\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\w+)\s*\|[^\r\n|]+\|\s*$')) {
     $symbol = $row.Groups[1].Value
     if ($documented.ContainsKey($symbol) -or -not $pins.ContainsKey($symbol) -or
         $pins[$symbol] -ne [int]$row.Groups[2].Value -or $signals[$symbol] -ne $row.Groups[3].Value) {
-        throw "README pinout mismatch: $symbol"
+        throw "PINOUT mismatch: $symbol"
     }
     $documented[$symbol] = $true
 }
-if ($documented.Count -ne $pins.Count) { throw 'README pinout is incomplete.' }
+if ($documented.Count -ne $pins.Count) { throw 'PINOUT table is incomplete.' }
 $bom = @{}
 foreach ($entry in (Import-Csv -LiteralPath (Join-Path $Root 'BOM.csv'))) {
     if ($bom.ContainsKey($entry.Id)) { throw "Duplicate BOM id $($entry.Id)" }
