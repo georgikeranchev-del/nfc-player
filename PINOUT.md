@@ -40,6 +40,13 @@ forbidden in this design. The retained straps 2, 5 and 15 are reviewed in
 
 ## Small connection schematic
 
+Open the full-page [SCHEMATIC.svg](SCHEMATIC.svg) for the complete module-level
+view, including power protection, the original driver/buffer, capacitors, KEY
+and the confirmed 4 ohm / 3 W mono speaker. Named supply nets join across panels.
+It is a drawing aid, not proof of clone-board internals or an ERC-checked netlist.
+
+![Battery-only whole-system wiring reference](SCHEMATIC.svg)
+
 ```text
 1S cell + fuse + protection --> IP5310/K648
   IP5310 OUT+ -- SW_LOAD --> LOAD_5V
@@ -80,6 +87,29 @@ ESP32 3V3 --> encoder breakout VCC, only if it needs power
 The diagram is an overview, not a replacement for protection terminals, capacitor
 placement and reset-state checks in [WIRING.md](WIRING.md). All load returns must
 remain on the protected side of the battery circuit.
+
+## Manufacturer reference diagrams
+
+These are the closest useful block references, not a verified schematic of the
+complete K648/DevKit/breakout combination. Use this project's GPIO assignments;
+other boards' example GPIO numbers and power wiring are not interchangeable.
+
+- [Microchip TC4420/29 datasheet](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21419D.pdf):
+  package pin diagrams and driver connections. Use the TC4420 non-inverting
+  PDIP-8 version, connect all required supply/GND/output pins, and check NC pins.
+- [TI SN74AHCT125 datasheet](https://www.ti.com/document-viewer/SN74AHCT125/datasheet):
+  DIP-14 pin functions, active-LOW enables, bypass/layout and TTL input levels.
+- [Adafruit MAX98357A mono schematic](https://cdn-learn.adafruit.com/assets/assets/000/032/642/medium800/adafruit_products_schem.png?1464034817):
+  close reference for the seven-pin I2S amplifier. Compare SD/GAIN resistors and
+  supply capacitors with the actual breakout; do not assume a clone matches it.
+  [Downloads and board files](https://learn.adafruit.com/adafruit-max98357-i2s-class-d-mono-amp/downloads).
+- [Adafruit NeoPixel wiring practices](https://learn.adafruit.com/adafruit-neopixel-uberguide/best-practices):
+  data resistor, local capacitance, common ground and 3.3 V to 5 V level shifting.
+
+The exact K648 power path, DevKit USB/VIN routing and SD/PN532 supply circuitry
+still require their board schematics or inspection. They are not inferred from
+the silicon names. The dedicated shunt connection diagram and scope settings are
+in [MANUAL_TESTS.md](MANUAL_TESTS.md#inrush-current-with-a-shunt-and-oscilloscope).
 
 ## USB programming boundary
 

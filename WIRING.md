@@ -40,6 +40,53 @@ Exact inventory and quantities are in [BOM.csv](BOM.csv). A gate driver and logi
 buffer do not solve boost overload, poor wiring, inappropriate battery selection,
 or a mechanically stalled platter.
 
+## Perfboard connectors, wire and sockets
+
+The selected ICs remain **TC4420CPA** and **SN74AHCT125N**. The previously discussed
+TC4427/74HCT126 alternatives are not adopted; do not mix their pinouts or enable
+wiring with this build.
+
+Soldering module power leads directly to their labelled supply/GND pads is fine.
+Terminate the other ends at rated, labelled terminal blocks on the perfboard so
+modules remain removable. Secure the cable independently of the solder pad and
+insulate exposed joints. Do not hang stiff wire or a heavy capacitor from a small
+breakout pad. This advice is for module pads, not soldering directly to a cell.
+
+| Proposed copper cross-section | Use and conditions |
+|---|---|
+| 1.5 mm2 | Ample starting point for short main power/return buses at the expected few-amp scale. It may be too stiff or large for perfboard holes; use supported distribution terminals or an insulated bus, not enlarged pads or a chain of solder blobs. |
+| 0.5 mm2 | Reasonable for short individual motor, amplifier and LED power/return branches. Verify voltage drop and temperature at measured current, plus the terminal/connector rating and fuse coordination. |
+| 0.33 mm2 | Electrically ample for GPIO signals; often larger than necessary. For SPI/I2S/LED data, short routing and nearby return paths matter more than copper area. |
+
+These are conditional wiring choices, not certified current ratings. Battery-side
+current can exceed 5 V load current. Include both outgoing and return conductors
+when calculating voltage drop; connector contacts and thin module traces may
+limit the circuit before the wire does. Keep motor/amp/ring returns separate back
+to the distribution point, not through ESP32 headers or a signal-ground jumper.
+
+Use terminal blocks specified for the conductor size and measured current. For
+stranded wire under screw clamps, use suitable ferrules where the terminal maker
+permits them; do not tin the clamped ends because solder can creep and loosen.
+Use proper crimps/torque and provide strain relief. Soldered ends at PCB pads are
+a different case and should be wetted normally. Label 5 V, 3V3, GND and signals;
+different module supply voltages are not interchangeable.
+
+Keep SPI and I2S wiring as short as practical, initially around 10 cm or less
+where layout permits; this is a layout goal, not a guaranteed maximum. Route
+clock/data with a nearby ground return and away from motor/gate/speaker wiring.
+Route each motor or supply outgoing/return pair together. Twist the two speaker
+leads together; neither speaker lead is a ground return.
+
+Good-quality DIP-8 and DIP-14 IC sockets on perfboard are appropriate. Align the
+socket notch and IC pin 1, inspect solder joints before inserting ICs, and insert
+or remove only with all power disconnected. Keep the gate resistor, pulldowns
+and driver bypass close to their relevant pins, not at the far end of a cable.
+
+Headers/sockets also make the DevKit removable. If the DevKit is permanently
+soldered, provide disconnectable connections for its complete player harness,
+including supply and GPIO paths. The present USB programming procedure requires
+that isolation; disconnecting only VIN while leaving GPIOs connected is not enough.
+
 ## Battery, protection and main switch
 
 ```text
@@ -71,6 +118,73 @@ For battery-only development omit the former series rail diode. Route IP5310
 output straight through the load switch to the star. Do not put motor/amp current
 through the ESP32 headers, skinny daisy-chain jumpers or long perfboard solder
 tracks. Use short power wires and pair each signal with a nearby return path.
+
+### Fuse and PCM during startup
+
+**A 3 A marking is not an instantaneous cutoff at 3.001 A.** The BOM still leaves
+fuse and protection selection open; no particular 3 A part is approved here.
+
+- An ordinary cartridge/blade fuse is a one-time protective component. A short
+  pulse above its rating may survive, while a larger/longer overload can melt it.
+  Use the exact fuse's time-current curve, pulse endurance, ambient derating and
+  DC breaking rating. Fast-acting and time-delay 3 A fuses need not behave alike.
+  If it blows, correct the cause before replacing it with the approved type; do
+  not bridge it or simply install a higher rating.
+- A resettable PTC is different: it heats into a high-resistance state and may
+  recover after the fault is removed and it cools. Hold/trip current, resistance
+  and delay differ from a fuse. It is not an automatic drop-in substitute here.
+- A PCM normally turns off its protection MOSFETs on a detected fault rather than
+  consuming itself. Its advertised continuous rating, overcurrent trip threshold,
+  detection delay and permitted surge rating are separate specifications. A
+  "3 A" board may trip above 3 A, but that does not authorize sustained overload.
+  Recovery may require load removal or a manufacturer-specified charger event;
+  never short pads to reset it. A poorly rated, overheated or miswired board can
+  still be permanently damaged, including failure to protect.
+
+Coordinate the fuse, PCM, cell and weakest wire/contact with the measured battery
+current and surge duration. The motor ramp does not control all cold-start inrush:
+charging the capacitors and booting the boost happen before the ramp. If normal
+running already exceeds a PCM's continuous rating, a longer ramp cannot fix it.
+Repeated trips, hot protection parts or blown fuses are faults to investigate,
+not expected startup behavior. Keep the load off until the cause is understood.
+
+### Connecting the 18650 holder and PCM
+
+The diagram above applies to a **documented 1S, 4.20 V Li-ion, common-port PCM**:
+the same protected P+/P- port carries discharge and later charge current. It is
+not a pin-position guide for an unidentified board. The PCM protects the cell;
+the IP5310 performs charging/boost conversion. A 2S/3S board is not suitable.
+
+For a bare cell in its holder, the electrical connections are:
+
+```text
+Holder + --> F1 close to holder + --> PCM B+
+Holder - --------------------------> PCM B-
+PCM P+ ----------------------------> IP5310 BAT+
+PCM P- ----------------------------> IP5310 BAT-/protected system return
+```
+
+All player grounds stay on the protected side. Do not connect holder - directly
+to ESP32, amplifier, motor-driver or USB ground around the PCM. Some common-port
+boards share B+ and P+ copper; others label pads differently. Do not infer pad
+positions or add bridges from that generalization. Boards with separate C-/P-
+charge/discharge ports require their own wiring plan; the K648 BAT connection
+both charges and discharges, so do not join those ports by guesswork.
+
+Remove the cell from the holder and disconnect every USB/external supply before
+soldering or continuity work. Mount the PCM on insulated supports or secure it
+against an insulating backing; no underside copper may touch perfboard buses,
+fasteners or the cell holder. Solder flexible pigtails to its labelled pads and
+land them on rated terminals, with strain relief. Do not force stiff 1.5 mm2 wire
+onto tiny PCM pads or carry pack current through small perfboard pad chains.
+Do not solder directly to the cell. Leave the fuse/cell out until wiring checks
+are complete, and follow the board maker's connection/activation sequence.
+
+The holder must fit the actual cell and have documented contacts/leads adequate
+for battery current. A holder is not protection. If using an already protected
+cell or protected pack, use its documented terminals instead of blindly stacking
+a second, uncoordinated PCM. The exact PCM model/pad labels and fuse part number
+are needed before treating the wiring and surge tolerance as verified.
 
 ### 18650 selection
 
@@ -119,6 +233,43 @@ that gives roughly **1.8 hours at 5.1 V / 1 A average load**, or **0.9 hours at
 2 A**. Usable capacity, cutoff, motor/audio peaks, temperature and cell condition
 can reduce this. Measure average power with representative music and lighting;
 do not treat the full labelled capacity as mAh available at 5 V.
+
+### Later runtime option: a 1S2P pack
+
+After the single-cell system is stable, a matched two-cell parallel pack can give
+**approximately twice the runtime** at the same load. Two 3000 mAh cells form a
+nominal 6000 mAh pack at the same 3.6/3.7 V nominal and 4.20 V full-charge voltage,
+not a higher-voltage pack. Actual runtime depends on usable capacity, cutoff,
+temperature and conversion efficiency. Charging from the same limited current
+will take roughly longer in proportion to capacity.
+
+The electrical topology is parallel (positive to positive, negative to negative),
+but this is not authorization to connect two loose cells or holders together.
+Different cell voltages can cause large equalization current before the player
+draws anything. A pack PCM does not necessarily interrupt circulating current
+between parallel cells. Matching voltage alone also does not prove cell health.
+
+For this build, prefer a professionally assembled **protected 1S2P pack** from a
+reputable supplier, with matched chemistry/model/capacity/age/state of charge,
+appropriate pack/inter-cell fault protection and documented output/charge ratings.
+Use its fused protected output at the existing IP5310 BAT interface:
+
+```text
+Documented protected 1S2P pack + --> appropriately rated fuse --> IP5310 BAT+
+Documented protected 1S2P pack - -----------------------------> IP5310 BAT-
+```
+
+Fuse placement/rating must follow the pack design; its internal protected cells
+are not exposed in this connection drawing. Do not charge the cells independently
+then reconnect them at different charge levels, hot-swap a cell, or use a two-cell
+series holder. **Never feed a 2S pack (up to 8.4 V) into this 1S battery input.**
+
+A parallel pack may reduce battery sag, but a 3 A pack PCM/fuse does not become a
+6 A device: it still carries the combined pack current. The IP5310 output limit
+also stays unchanged. Recheck charging compatibility, protection and mechanical
+space before adoption. It is worth considering if measured one-cell runtime is
+too short; it is not needed just to make an otherwise adequate one-cell design
+more complicated. The current BOM and schematic remain a single-cell baseline.
 
 ## Motor: driven gate, low-side switching
 
@@ -178,6 +329,13 @@ it open gives nominal 9 dB only if the breakout does not override it. SD HIGH
 selects a channel as well as enabling output. Check mono/stereo content. Speaker
 goes between amplifier + and - outputs; NEITHER speaker lead connects to ground.
 
+The speaker is confirmed as **mono, 4 ohm, 3 W**, a suitable nominal load for the
+MAX98357A. The 3 W marking is a power-handling rating, not a constant electrical
+load. Start at low volume and avoid sustained clipping/full-scale test tones;
+the amplifier can approach or exceed that nominal power under some conditions.
+Its wattage label is not a speaker-protection limiter. Neither speaker lead goes
+to GND, including an oscilloscope ground clip.
+
 ## KEY and encoder
 
 ```text
@@ -223,6 +381,23 @@ Electrolytics on 5 V: >=10 V rating, correct polarity. Yellow plastic box caps
 are often film; read markings rather than assume. Short-leaded ceramics belong
 at logic/driver supply pins. Large bulk caps cannot cover seconds-long shutdown
 and can worsen inrush. Do not keep increasing them without waveforms.
+
+### Capacitor placement on module pins
+
+Yes: a capacitor directly across a module's correct supply and GND pads is useful
+when it keeps the leads short. Put the 100 nF ceramic closest to the supply entry
+or IC supply pins; place bulk electrolytics nearby and mechanically support them.
+On socketed ICs, the bypass can be soldered to the perfboard/socket supply pads
+on the underside, clear of adjacent pins and insulated against accidental contact.
+For AHCT125, it goes between pins 14 and 7. Follow the TC4420's actual supply/GND
+pinout and retain its local 100 nF plus 1 uF ceramics.
+
+Do not put capacitors in series with a supply, across arbitrary signal pins, or
+between either amplifier speaker output and GND. The motor's small brush capacitor
+is the deliberate exception across motor terminals; its bulk capacitor remains
+between the motor's supply and GND, not across the switching drain. Check existing
+module capacitors before adding more bulk. Every added bulk capacitor also adds
+startup charging current, so record the fitted values in the manual test results.
 
 ## Perfboard assembly and acceptance
 

@@ -49,6 +49,148 @@ audio, resets/dropouts, temperatures, and pass/fail/not checked. Use the same
 initial cell voltage as closely as practical when comparing candidates. Let the
 motor stop completely between starts and allow components to cool as needed.
 
+## Inrush current with a shunt and oscilloscope
+
+**Before connecting probes:** identify the scope and probe models, whether inputs
+share protective-earth ground, the probe attenuation settings, input voltage
+limits and available sensitivity/bandwidth. If these are unfamiliar, leave the
+shunt test disconnected for now. Learn the controls and probe compensation with
+the scope's own documented calibration output and ground terminal first, using
+the probe/manual's instructions; the player and battery stay disconnected.
+Do not assume a handheld or USB scope has isolated channels.
+
+Start by measuring **total battery current** during battery-only operation. This
+shows what the cell/protection supplies, including boost losses. It is NOT the
+same as 5 V output current or instantaneous motor winding current. Disconnect
+both player USB cables and any external supply/programmer before this setup.
+
+Do not intentionally exceed an unverified 3 A PCM/fuse to find its limit. Obtain
+the fuse time-current curve and the PCM's continuous, surge, trip-delay and reset
+specifications first. See [WIRING.md](WIRING.md#fuse-and-pcm-during-startup). A meter
+in voltage mode can help with initial steady-voltage checks, but cannot certify
+the inrush pulse. Never put a meter in current mode across a cell or supply.
+
+### Shunt specification
+
+Use **0.010 ohm (10 milliohm, often marked R010), at least 3 W, 1% tolerance**,
+preferably a low-inductance metal-element current-sense resistor with a temperature
+coefficient of 100 ppm/degree C or better. A through-hole part or a ready-made
+four-terminal shunt fixture suits the perfboard bench setup. Check its actual
+power derating, pulse-energy rating and mounting requirements. This is a purchase
+specification, not confirmation of a particular shop's stock.
+
+Do not confuse R010 with 10 ohm. Do not use an unidentified wirewound/cement power
+resistor for accurate PWM peak measurements: inductance adds voltage unrelated
+to resistive current. Use separate, short sense contacts directly at the element
+terminals (Kelvin connections), not at the ends of its power cables or screw
+contacts. Mechanically support and insulate the temporary fixture.
+
+$$
+V_{shunt}=I R_{shunt},\qquad P_{shunt}=I_{RMS}^{2}R_{shunt}
+$$
+
+| Current example | Voltage across 0.010 ohm | Dissipation at steady current |
+|---|---|---|
+| 1 A | 10 mV | 0.01 W |
+| 3 A | 30 mV | 0.09 W |
+| 5 A | 50 mV | 0.25 W |
+| 10 A | 100 mV | 1.00 W |
+
+These examples do not authorize a 10 A test or establish the cell/module ratings.
+The 3 W choice provides thermal margin at the expected few-amp load; it is not
+a fuse or current limiter. For pulses, also check energy against the resistor
+datasheet. Even 50-100 mV of added drop can affect a marginal startup. Compare
+operation with the shunt removed, reconnecting only with all power off. An
+ordinary two-wire multimeter resistance reading is unreliable at 10 milliohm;
+use the specified tolerance or verify with a known safe current and voltage.
+
+### Battery-side connection for a grounded scope
+
+The following assumes the K648 has a verified common BAT-/OUT- return, as in the
+project wiring. Check that with all power disconnected; if it is not common, do
+not bridge unknown terminals. For an externally protected cell, P- below is the
+PCM's protected output, NOT raw cell negative/B-. For a protected battery pack,
+use its documented protected output terminals. Keep the existing fuse/protection.
+
+```text
+Fused/protected 1S source P+ --------------------------> IP5310 BAT+
+
+Protected P- ----o----[ R_SHUNT = 0.010 ohm ]----o------> IP5310 BAT-
+                |                              |         and OUT-/system GND
+            CH1 probe tip                 ALL scope ground clips
+                                          All player grounds stay here
+
+IP5310 OUT+ --> load switch --> LOAD_5V ----> CH2 probe tip (at ESP32 VIN)
+
+Discharge return current flows through the shunt from right to left.
+```
+
+**CH1 reads negative while the battery discharges.** With the connections above:
+
+$$
+I_{battery}=-\frac{V_{CH1}}{0.010\ \Omega}
+$$
+
+Thus -50 mV means +5 A battery discharge. Invert CH1 for a positive display, or
+apply the minus sign in the calculation. CH2 directly reads the 5 V rail relative
+to system GND. A third channel, if available, can monitor ESP32 3.3 V with its
+ground at that same system-GND point.
+
+All scope channel grounds are normally joined to each other and protective earth.
+**Never put a second ground clip on P-, raw B-, a positive rail, motor drain, or
+either speaker terminal.** A clip on P- would short this shunt through the scope.
+Do not let a USB cable, bench supply, programmer or another instrument create a
+parallel return. Do not defeat the scope's protective earth, and do not assume
+a battery-powered/USB scope has individually isolated channels. Attach probes
+with the circuit off. This setup is only for the isolated battery-only test.
+
+### Capture procedure
+
+1. Complete the earlier wiring/protection checks and start at the appropriate
+   B1-B5 stage below. Check shunt wiring and absence of an alternate return before
+   powering. Use short power leads and short probe sense/ground connections.
+2. Use DC coupling and a high-impedance scope input, not 50 ohm termination.
+   A suitable 1x probe can improve millivolt sensitivity here; match the scope's
+   attenuation setting to the probe. Start around 10-20 mV/div on CH1 and adjust
+   to avoid clipping the trace. Record the zero-current offset before power-on.
+3. Use single acquisition with 20-30% pre-trigger. On the uninverted CH1 trace,
+   choose a falling trigger below the idle-current level. Start around 200-500
+   ms/div to capture the ramp plus audio/LED onset; extend the record for a 2 s
+   ramp. A sample rate of at least 1 MS/s is a useful long-record starting point
+   if the scope has sufficient memory, not a guarantee of capturing fast peaks.
+4. Capture cold boost startup, load-switch turn-on and tag-triggered motor start
+   as separate events. Their capacitor/boost loads differ. Keep CH2 recording the
+   rail sag at the same time. Follow the existing quiet/full-load ramp comparison;
+   do not force a motor stall to obtain a larger reading.
+5. Make a separate short, high-sample-rate acquisition to inspect 20 kHz PWM and
+   switching peaks. A 20 MHz bandwidth limit can reduce pickup if available, but
+   record the bandwidth/sample rate used. Long timebases, sample aliasing, probe
+   loops and shunt inductance can hide or invent apparent peaks. Do not average
+   away a one-time inrush event or interpret every narrow spike as real current.
+6. Record peak and steady current, pulse duration, minimum 5 V/3.3 V, battery
+   voltage, mechanical load and capacitor values. Stop for the existing fault
+   conditions. Disconnect power before removing the shunt or changing probes.
+
+For reference on common-ground limitations, see
+[Tektronix: floating measurements and operator protection](https://www.tek.com/en/documents/technical-brief/floating-oscilloscope-measurements-and-operator-protection).
+Exact trigger/menu settings depend on the scope and probe model.
+
+### Other current locations
+
+To measure the boost's **5 V load current**, a shunt in the positive feed between
+the load switch and LOAD_5V star preserves the common ground. That requires a
+proper differential measurement or suitable current probe; do not clip a normal
+scope ground to either high-side shunt terminal. Differential probes must resolve
+millivolts on a roughly 5 V common-mode signal; many high-voltage probes are too
+noisy or attenuate too much. Two ordinary channels with subtraction are not an
+accurate default for such a small voltage difference.
+
+A shunt in the motor's supply branch measures branch supply current, not all
+recirculating winding current during PWM off-time. Do not insert the first test
+shunt between the MOSFET source and its driver/ESP32 ground: that changes the gate
+reference. Keep the low-side battery setup out of the later charging/dual-USB
+tests; those need a separately reviewed measurement connection.
+
 ## Perfboard assembly and acceptance
 
 1. Place modules/socket footprints on a 200 x 150 mm cardboard layout including

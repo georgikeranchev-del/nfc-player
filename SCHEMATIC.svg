@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1660" viewBox="0 0 1640 1660" role="img" aria-labelledby="title desc">
+  <title id="title">NFC player battery-only connection drawing</title>
+  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
+      .title { font-size: 28px; font-weight: 700; }
+      .heading { font-size: 20px; font-weight: 700; }
+      .part { font-size: 18px; font-weight: 600; }
+      .small { font-size: 14px; }
+      .tiny { font-size: 12px; }
+      .muted { fill: #53616a; }
+      .warning { fill: #9e2525; font-weight: 600; }
+      .box { fill: #f7f9fa; stroke: #596770; stroke-width: 1.5; }
+      .wire { fill: none; stroke: #26343c; stroke-width: 2; }
+      .supply { fill: none; stroke: #b62c35; stroke-width: 2.5; }
+      .signal { fill: none; stroke: #067d8a; stroke-width: 2; }
+      .rule { stroke: #c5cdd1; stroke-width: 1; }
+      .dot { fill: #26343c; }
+    </style>
+  </defs>
+  <rect width="1640" height="1660" fill="white"/>
+  <text x="40" y="45" class="title">NFC Player: Battery-Only Connection Drawing</text>
+  <text x="40" y="75">TC4420CPA + SN74AHCT125N | GPIO numbers, not physical DevKit header positions | 4 ohm / 3 W mono speaker</text>
+  <text x="40" y="101" class="small warning">Functional reference, not an electrically verified module schematic. Confirm breakout supply voltages and exact package pinouts.</text>
+
+  <text x="40" y="145" class="heading">1. Protected power distribution</text>
+  <rect x="50" y="185" width="170" height="110" class="box"/>
+  <text x="70" y="219" class="part">1S Li-ion cell</text>
+  <text x="70" y="245" class="small">3.6/3.7 V nominal</text>
+  <text x="70" y="272" class="small">4.20 V charge type</text>
+  <text x="225" y="200" class="small">+</text>
+  <text x="225" y="285" class="small">-</text>
+  <path d="M220 210 H255 M345 210 H390" class="supply"/>
+  <rect x="255" y="200" width="90" height="20" fill="white" stroke="#b62c35" stroke-width="2"/>
+  <text x="247" y="183" class="small">F1, near cell +</text>
+  <path d="M220 270 H390" class="wire"/>
+  <rect x="390" y="180" width="260" height="140" class="box"/>
+  <text x="420" y="250" class="part">Documented 1S PCM</text>
+  <text x="403" y="213" class="small">B+</text>
+  <text x="403" y="274" class="small">B-</text>
+  <text x="616" y="213" class="small">P+</text>
+  <text x="616" y="274" class="small">P-</text>
+  <path d="M650 210 H750" class="supply"/>
+  <path d="M650 270 H750" class="wire"/>
+  <rect x="750" y="180" width="265" height="140" class="box"/>
+  <text x="805" y="251" class="part">IP5310 / K648</text>
+  <text x="762" y="212" class="small">BAT+</text>
+  <text x="762" y="274" class="small">BAT-</text>
+  <text x="963" y="212" class="small">OUT+</text>
+  <text x="963" y="274" class="small">OUT-</text>
+  <path d="M1015 210 H1090 M1090 210 L1142 188 M1147 210 H1270" class="supply"/>
+  <circle cx="1090" cy="210" r="4" fill="#b62c35"/>
+  <circle cx="1147" cy="210" r="4" fill="#b62c35"/>
+  <text x="1080" y="166" class="small">SW_LOAD</text>
+  <path d="M1015 270 H1270" class="wire"/>
+  <rect x="1270" y="180" width="310" height="140" class="box"/>
+  <text x="1290" y="212" class="part">LOAD_5V star</text>
+  <text x="1290" y="242" class="small">Separate load branches</text>
+  <text x="1290" y="274" class="part">LOAD_GND star</text>
+  <text x="750" y="349" class="small">1000 uF + 100 nF across IP5310 output; verify startup with fitted capacitance.</text>
+  <text x="50" y="350" class="small">A protected pack already contains a PCM.</text>
+  <text x="50" y="374" class="small warning">Never join raw B- to system GND around the protection.</text>
+  <text x="750" y="374" class="small">All LOAD_GND labels below join the protected system return, not raw cell negative.</text>
+  <line x1="40" y1="392" x2="1600" y2="392" class="rule"/>
+
+  <text x="40" y="425" class="heading">2. ESP32, storage, NFC and encoder</text>
+  <rect x="60" y="455" width="220" height="365" class="box"/>
+  <text x="80" y="490" class="part">Classic ESP32</text>
+  <text x="80" y="515" class="part">DevKit V1</text>
+  <text x="80" y="560" class="small">VIN/5V: LOAD_5V</text>
+  <text x="80" y="589" class="small">GND: LOAD_GND</text>
+  <text x="80" y="618" class="small">3V3: logic supply</text>
+  <text x="80" y="660" class="small">GPIO16/17 require</text>
+  <text x="80" y="683" class="small">no PSRAM conflict.</text>
+  <text x="80" y="728" class="small warning">No 5 V on GPIOs.</text>
+  <text x="80" y="775" class="small">Other GPIO nets appear</text>
+  <text x="80" y="798" class="small">in panels 3, 4 and 5.</text>
+
+  <rect x="560" y="455" width="240" height="110" class="box"/>
+  <text x="580" y="486" class="part">SD module</text>
+  <text x="580" y="514" class="small">Supply: check breakout</text>
+  <text x="580" y="542" class="small">GND: LOAD_GND</text>
+  <path d="M280 520 H560" class="signal"/>
+  <text x="300" y="482" class="small">GPIO13: CS | GPIO14: SCK</text>
+  <text x="300" y="506" class="small">GPIO15: MOSI | GPIO16: MISO</text>
+
+  <rect x="560" y="600" width="240" height="110" class="box"/>
+  <text x="580" y="631" class="part">PN532 in SPI mode</text>
+  <text x="580" y="659" class="small">Supply: check breakout</text>
+  <text x="580" y="687" class="small">GND: LOAD_GND</text>
+  <path d="M280 665 H560" class="signal"/>
+  <text x="300" y="626" class="small">GPIO5: SS | GPIO18: SCK</text>
+  <text x="300" y="650" class="small">GPIO23: MOSI | GPIO19: MISO</text>
+
+  <rect x="560" y="745" width="240" height="105" class="box"/>
+  <text x="580" y="775" class="part">Encoder + push</text>
+  <text x="580" y="800" class="small">Common / other SW: GND</text>
+  <text x="580" y="827" class="small">VCC: 3V3 only if needed</text>
+  <path d="M280 808 H560" class="signal"/>
+  <text x="300" y="769" class="small">GPIO32: CLK | GPIO33: DT</text>
+  <text x="300" y="793" class="small">GPIO4: SW (active LOW)</text>
+
+  <text x="855" y="425" class="heading">3. Motor: driver, switch and flyback</text>
+  <text x="1345" y="458" class="small">LOAD_5V</text>
+  <path d="M1390 465 V478 M1390 465 H1540 V505 M1390 465 H1290 V498" class="supply"/>
+  <circle cx="1390" cy="510" r="32" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="1380" y="517" class="part">M</text>
+  <text x="1350" y="568" class="small">N20 motor</text>
+  <path d="M1390 542 V635 M1390 590 H1540 V550" class="wire"/>
+  <path d="M1523 505 H1557 M1540 510 L1523 545 H1557 Z" fill="white" stroke="#26343c" stroke-width="2"/>
+  <path d="M1540 545 V550" class="wire"/>
+  <text x="1430" y="486" class="tiny">band / cathode</text>
+  <text x="1470" y="615" class="small">1N5822</text>
+  <path d="M1272 498 H1308 M1272 506 H1308 M1290 506 V590 H1390" class="wire"/>
+  <text x="1180" y="513" class="small">100 nF</text>
+  <text x="1180" y="535" class="small">across brushes</text>
+
+  <rect x="905" y="635" width="205" height="92" class="box"/>
+  <text x="922" y="665" class="part">TC4420CPA</text>
+  <text x="922" y="691" class="small">VDD: LOAD_5V</text>
+  <text x="922" y="714" class="small">GND: LOAD_GND</text>
+  <path d="M855 680 H905 M1110 680 H1155 M1235 680 H1330" class="signal"/>
+  <text x="853" y="620" class="small">GPIO27</text>
+  <text x="853" y="649" class="tiny">INPUT</text>
+  <rect x="1155" y="670" width="80" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="1162" y="660" class="small">100 ohm</text>
+  <rect x="1330" y="635" width="120" height="92" class="box"/>
+  <text x="1340" y="667" class="part">IRLZ44N</text>
+  <text x="1336" y="691" class="small">G</text>
+  <text x="1400" y="629" class="tiny">D</text>
+  <text x="1382" y="719" class="tiny">S</text>
+  <path d="M1390 727 V785 M880 680 V734 M880 766 V785 H1390 M1280 680 V734 M1280 766 V785" class="wire"/>
+  <rect x="872" y="734" width="16" height="32" fill="white" stroke="#26343c" stroke-width="2"/>
+  <rect x="1272" y="734" width="16" height="32" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="897" y="756" class="small">10k input pulldown</text>
+  <text x="1298" y="756" class="small">10k gate-source</text>
+  <circle cx="880" cy="680" r="3" class="dot"/>
+  <circle cx="1280" cy="680" r="3" class="dot"/>
+  <text x="1120" y="807" class="small">LOAD_GND</text>
+  <text x="870" y="839" class="small">Driver: 100 nF + 1 uF across VDD/GND at its pins.</text>
+  <text x="870" y="861" class="small">Motor bulk: 220 uF across LOAD_5V/GND, NOT drain.</text>
+  <line x1="40" y1="889" x2="1600" y2="889" class="rule"/>
+
+  <text x="40" y="925" class="heading">4. LED level shift and amplifier shutdown isolation</text>
+  <rect x="270" y="975" width="340" height="170" class="box"/>
+  <text x="314" y="1005" class="part">SN74AHCT125N</text>
+  <text x="287" y="1035" class="small">2: 1A</text>
+  <text x="526" y="1035" class="small">1Y: 3</text>
+  <text x="287" y="1110" class="small">5: 2A</text>
+  <text x="526" y="1110" class="small">2Y: 6</text>
+  <path d="M60 1025 H270 M610 1025 H675 M735 1025 H790 M60 1100 H270 M610 1100 H745 V1245 H790" class="signal"/>
+  <text x="65" y="1012">GPIO21</text>
+  <text x="65" y="1055" class="small">10k input-to-GND</text>
+  <text x="65" y="1087">GPIO2</text>
+  <text x="65" y="1130" class="small">10k input-to-GND</text>
+  <rect x="675" y="1015" width="60" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="673" y="1000" class="small">330 ohm</text>
+  <text x="331" y="955" class="small">Pin 14: LOAD_5V</text>
+  <path d="M440 960 V975" class="supply"/>
+  <path d="M440 1145 V1163" class="wire"/>
+  <text x="325" y="1185" class="small">Pin 7: LOAD_GND</text>
+  <text x="280" y="1217" class="small">Pins 1, 4 (/OE): GND; 100 nF at pins 14/7.</text>
+  <text x="280" y="1241" class="small">Unused 10, 13: 5V; 9, 12: GND; 8, 11: open.</text>
+  <text x="280" y="1265" class="small warning">AHCT125, not HC125 or HCT126 wiring.</text>
+  <rect x="790" y="980" width="220" height="105" class="box"/>
+  <text x="813" y="1010" class="part">24-pixel ring</text>
+  <text x="800" y="1037" class="small">DIN</text>
+  <text x="856" y="1065" class="small">5V / GND</text>
+  <text x="805" y="1139" class="small">470 uF + 100 nF at ring</text>
+
+  <rect x="790" y="1205" width="220" height="210" class="box"/>
+  <text x="812" y="1235" class="part">MAX98357A</text>
+  <text x="800" y="1255" class="small">SD/SD_MODE</text>
+  <text x="800" y="1290" class="small">BCLK</text>
+  <text x="800" y="1320" class="small">LRC/WS</text>
+  <text x="800" y="1350" class="small">DIN</text>
+  <text x="800" y="1380" class="small">VIN: LOAD_5V</text>
+  <text x="800" y="1402" class="small">GND: LOAD_GND</text>
+  <path d="M630 1280 H790 M630 1310 H790 M630 1340 H790" class="signal"/>
+  <text x="640" y="1271" class="small">GPIO26</text>
+  <text x="640" y="1301" class="small">GPIO25</text>
+  <text x="640" y="1331" class="small">GPIO22</text>
+  <text x="315" y="1320" class="small">Amp GAIN is separate from SD.</text>
+  <text x="315" y="1345" class="small">Confirm SD is not hard-strapped to VIN.</text>
+  <text x="315" y="1370" class="small">Amp bypass: 100 uF + 100 nF.</text>
+  <path d="M855 1415 V1470 M945 1415 V1470" class="wire"/>
+  <text x="838" y="1446" class="small">+</text>
+  <text x="952" y="1446" class="small">-</text>
+  <rect x="800" y="1470" width="215" height="65" class="box"/>
+  <text x="818" y="1497" class="part">4 ohm / 3 W mono</text>
+  <text x="818" y="1520" class="small warning">Neither lead to GND</text>
+
+  <text x="1090" y="925" class="heading">5. KEY driver and cold-start contact</text>
+  <rect x="1365" y="978" width="128" height="110" class="box"/>
+  <text x="1381" y="1004" class="part">2N3904</text>
+  <text x="1374" y="1040" class="small">B</text>
+  <text x="1440" y="974" class="tiny">C</text>
+  <text x="1425" y="1079" class="tiny">E</text>
+  <path d="M1095 1030 H1195 M1275 1030 H1365" class="signal"/>
+  <rect x="1195" y="1020" width="80" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="1095" y="1015" class="small">GPIO17</text>
+  <text x="1220" y="1010" class="small">1k</text>
+  <path d="M1430 978 V954 H1560 V1010 M1560 1045 V1130 H1320 M1430 1088 V1130 M1320 1030 V1070 M1320 1102 V1130" class="wire"/>
+  <text x="1360" y="947" class="small">IP5310 KEY</text>
+  <rect x="1312" y="1070" width="16" height="32" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="1260" y="1091" class="small">10k</text>
+  <circle cx="1320" cy="1030" r="3" class="dot"/>
+  <path d="M1560 1010 L1540 1041" class="wire"/>
+  <circle cx="1560" cy="1010" r="3" class="dot"/>
+  <circle cx="1560" cy="1045" r="3" class="dot"/>
+  <text x="1505" y="1080" class="tiny">NO button /</text>
+  <text x="1505" y="1098" class="tiny">service contact</text>
+  <text x="1370" y="1154" class="small">LOAD_GND</text>
+  <text x="1100" y="1204" class="small">GPIO4 encoder switch stays separate from KEY.</text>
+  <text x="1100" y="1229" class="small">KEY transistor can tap only while ESP32 is powered.</text>
+  <text x="1100" y="1254" class="small">Check the actual TO-92 transistor pin order.</text>
+  <text x="1100" y="1305" class="part">Physical assembly</text>
+  <text x="1100" y="1334" class="small">1.5 mm2 main buses; 0.5 mm2 load branches.</text>
+  <text x="1100" y="1359" class="small">0.33 mm2 short signal wires with nearby returns.</text>
+  <text x="1100" y="1384" class="small">Rated terminals, strain relief and socketed ICs.</text>
+  <text x="1100" y="1409" class="small">100 nF at ESP32 VIN, plus existing board bypass.</text>
+  <text x="1100" y="1454" class="small warning">USB programming: disconnect the complete</text>
+  <text x="1100" y="1477" class="small warning">player harness, not just the VIN wire.</text>
+  <text x="1100" y="1508" class="small">Temporary shunt setup: see MANUAL_TESTS.md.</text>
+
+  <line x1="40" y1="1560" x2="1600" y2="1560" class="rule"/>
+  <text x="40" y="1590" class="small">Named LOAD_5V / LOAD_GND nets connect across panels. SPI lines are grouped; individual assignments are in PINOUT.md.</text>
+  <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
+  <text x="40" y="1640" class="small warning">No charging or programming USB is included in this battery-only drawing. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
+</svg>

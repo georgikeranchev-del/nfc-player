@@ -8,7 +8,7 @@ SW_LOAD,1,DC-rated SPST switch,verify,Use existing switch on LOAD_5V if suitably
 U_SD,1,SD breakout and card,keep,Confirm module supply voltage and 3.3V SPI signals
 U_NFC,1,PN532 SPI breakout,keep,Verify power/logic requirements and SPI mode
 U_AMP,1,MAX98357A seven-pin module,keep,SD via AHCT buffer; no speaker terminal to ground
-SPK1,1,Speaker matched to amplifier,verify,Check impedance and power rating
+SPK1,1,Mono speaker 4ohm 3W,keep,User-confirmed rating; avoid sustained clipping; neither terminal to ground
 ENC1,1,Incremental encoder with NO push,keep,GPIO4 push switch remains separate from KEY
 LED1,1,24-pixel WS2812B ring,keep,5V and buffered data
 U_BUFFER,1,SN74AHCT125N DIP-14,buy,One channel LED data and one amp SD; not HC125
