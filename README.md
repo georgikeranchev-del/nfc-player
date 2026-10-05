@@ -102,8 +102,11 @@ open PowerShell in the repository root, then run:
 ```
 
 `-Install` reads `arduino-build.json` and installs the pinned ESP32 core and
-libraries before compiling. It needs internet access the first time. To run the
-checks separately, use:
+libraries before compiling. The core is installed in Arduino CLI's normal
+platform data directory; libraries are installed in this repository's ignored
+`libraries/` folder, and compilation explicitly uses that folder. This keeps the
+project dependencies together without committing downloaded library files. The
+install needs internet access the first time. To run the checks separately, use:
 
 ```powershell
 ./scripts/Check-Design.ps1
@@ -112,8 +115,8 @@ checks separately, use:
 ```
 
 Native tests require Visual Studio C++ tools and Windows SDK. Without `-Install`,
-the build script only compiles and expects the pinned dependencies to be present.
-Neither build command uploads.
+the build script only compiles and expects the pinned dependencies to already
+exist in the repository's `libraries/` folder. Neither build command uploads.
 
 [GitHub Actions](.github/workflows/checks.yml) runs design rules, rule-mutation
 tests, native control tests and a separate real Arduino compilation. Push the
