@@ -102,6 +102,10 @@
   <text x="300" y="793" class="small">GPIO4: SW (active LOW)</text>
 
   <text x="855" y="425" class="heading">3. Motor: driver, switch and flyback</text>
+  <text x="870" y="462" class="small">DIP pins: top view, notch up.</text>
+  <text x="870" y="484" class="small">Solder-side view is mirrored.</text>
+  <text x="870" y="576" class="small">TC4420: bridge 1+8, 4+5, 6+7 separately.</text>
+  <text x="870" y="598" class="small">Pin 3: NC; leave open.</text>
   <text x="1345" y="458" class="small">LOAD_5V</text>
   <path d="M1390 465 V478 M1390 465 H1540 V505 M1390 465 H1290 V498" class="supply"/>
   <circle cx="1390" cy="510" r="32" fill="white" stroke="#26343c" stroke-width="2"/>
@@ -116,13 +120,27 @@
   <text x="1180" y="513" class="small">100 nF</text>
   <text x="1180" y="535" class="small">across brushes</text>
 
+  <g id="motor-bulk-capacitor">
+    <title>220 uF motor rail capacitor: positive to LOAD_5V, negative to LOAD_GND, not motor drain.</title>
+    <path d="M1540 465 H1580 V666" class="supply"/>
+    <path d="M1562 666 H1598 M1562 674 H1598" class="wire"/>
+    <path d="M1580 674 V785 H1390" class="wire"/>
+    <circle cx="1540" cy="465" r="3" class="dot"/>
+    <circle cx="1390" cy="785" r="3" class="dot"/>
+    <text x="1560" y="652" class="small">+</text>
+    <text x="1560" y="698" class="small">-</text>
+    <text x="1470" y="666" class="small">220 uF</text>
+    <text x="1470" y="690" class="small">&gt;=10 V</text>
+  </g>
+
   <rect x="905" y="635" width="205" height="92" class="box"/>
   <text x="922" y="665" class="part">TC4420CPA</text>
-  <text x="922" y="691" class="small">VDD: LOAD_5V</text>
-  <text x="922" y="714" class="small">GND: LOAD_GND</text>
+  <text x="922" y="691" class="small">1+8 VDD: LOAD_5V</text>
+  <text x="922" y="714" class="small">4+5 GND: LOAD_GND</text>
   <path d="M855 680 H905 M1110 680 H1155 M1235 680 H1330" class="signal"/>
   <text x="853" y="620" class="small">GPIO27</text>
-  <text x="853" y="649" class="tiny">INPUT</text>
+  <text x="853" y="649" class="tiny">2: INPUT</text>
+  <text x="1118" y="706" class="tiny">6+7: OUTPUT</text>
   <rect x="1155" y="670" width="80" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="1162" y="660" class="small">100 ohm</text>
   <rect x="1330" y="635" width="120" height="92" class="box"/>
@@ -139,7 +157,7 @@
   <circle cx="1280" cy="680" r="3" class="dot"/>
   <text x="1120" y="807" class="small">LOAD_GND</text>
   <text x="870" y="839" class="small">Driver: 100 nF + 1 uF across VDD/GND at its pins.</text>
-  <text x="870" y="861" class="small">Motor bulk: 220 uF across LOAD_5V/GND, NOT drain.</text>
+  <text x="870" y="861" class="small">Motor bulk: 220 uF (+ to LOAD_5V, - to LOAD_GND), NOT drain.</text>
   <line x1="40" y1="889" x2="1600" y2="889" class="rule"/>
 
   <text x="40" y="925" class="heading">4. LED level shift and amplifier shutdown isolation</text>
@@ -156,12 +174,12 @@
   <text x="65" y="1130" class="small">10k input-to-GND</text>
   <rect x="675" y="1015" width="60" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="673" y="1000" class="small">330 ohm</text>
-  <text x="331" y="955" class="small">Pin 14: LOAD_5V</text>
+  <text x="305" y="955" class="small">Join 10+13+14: LOAD_5V</text>
   <path d="M440 960 V975" class="supply"/>
   <path d="M440 1145 V1163" class="wire"/>
-  <text x="325" y="1185" class="small">Pin 7: LOAD_GND</text>
-  <text x="280" y="1217" class="small">Pins 1, 4 (/OE): GND; 100 nF at pins 14/7.</text>
-  <text x="280" y="1241" class="small">Unused 10, 13: 5V; 9, 12: GND; 8, 11: open.</text>
+  <text x="290" y="1185" class="small">Join 1+4+7+9+12: LOAD_GND</text>
+  <text x="280" y="1217" class="small">Bridge groups above; 100 nF at pins 14/7.</text>
+  <text x="280" y="1241" class="small">Outputs 8, 11: each open; do not join outputs.</text>
   <text x="280" y="1265" class="small warning">AHCT125, not HC125 or HCT126 wiring.</text>
   <rect x="790" y="980" width="220" height="105" class="box"/>
   <text x="813" y="1010" class="part">24-pixel ring</text>

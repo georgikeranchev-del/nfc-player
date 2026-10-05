@@ -29,7 +29,7 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | PN532_MOSI | 23 | U_NFC | PN532 MOSI. |
 | I2S_LRC | 25 | U_AMP | MAX98357A LRC/WS. |
 | I2S_BCLK | 26 | U_AMP | MAX98357A BCLK. |
-| MOTOR_GATE | 27 | U_GATE | TC4420 INPUT with 10k to GND; OUTPUT through 100 ohm to IRLZ44N gate. Keep 10k directly between gate and source. GPIO27 does not drive the MOSFET gate directly. |
+| MOTOR_GATE | 27 | U_GATE | TC4420CPA INPUT pin 2 with 10k to GND; joined OUTPUT pins 6/7 through one 100 ohm resistor to IRLZ44N gate. Keep 10k directly between gate and source. GPIO27 does not drive the MOSFET gate directly. |
 | ENCODER_CLK | 32 | ENC1 | Encoder A/CLK; common to GND. |
 | ENCODER_DT | 33 | ENC1 | Encoder B/DT; common to GND. |
 <!-- PINOUT:END -->
@@ -58,7 +58,7 @@ LOAD_5V --+--> ESP32 VIN/5V
 motor - ------> IRLZ44N drain; source --> LOAD_GND
 flyback diode: anode --> motor -; band/cathode --> motor +
 
-GPIO27 --> TC4420 --> 100 ohm --> IRLZ44N gate
+GPIO27 --> TC4420 pin 2; joined pins 6/7 --> 100 ohm --> IRLZ44N gate
 GPIO21 --> AHCT125 channel 1 --> 330 ohm --> ring DIN
 GPIO2  --> AHCT125 channel 2 -------------> amplifier SD
 GPIO17 --> 1k --> KEY transistor base; collector --> IP5310 KEY
@@ -72,17 +72,26 @@ ESP32 3V3 --> encoder breakout VCC, only if it needs power
 - SD and PN532 supply voltages depend on the actual breakout schematic; they are
   deliberately absent from the blanket 5 V list. Their SPI signals must be 3.3 V
   compatible. Do not drive any unpowered module through its GPIO connections.
-- SN74AHCT125N DIP-14: VCC pin 14 to LOAD_5V, GND pin 7 to LOAD_GND, /OE pins 1
-  and 4 to GND. Unused /OE pins 10/13 go to VCC, inputs 9/12 to GND; outputs 8/11
-  stay unconnected. Add 100 nF at the supply pins. Use AHCT, not plain HC.
-- TC4420 requires 100 nF plus 1 uF local bypass and all required GND/output pins
-  wired per its exact package datasheet. Gate, driver-input and buffer-input
-  pulldowns in the table remain required; this overview omits their drawn symbols.
+- SN74AHCT125N DIP-14: join pins 1, 4, 7, 9, 12 to LOAD_GND; join pins 10, 13, 14
+  to LOAD_5V. Outputs 8 and 11 each stay open. Never join separate outputs 3, 6,
+  8 or 11 together. Inputs 2 and 5 keep separate 10k pulldowns, not direct ground
+  bridges. Add 100 nF between pins 14/7. Use AHCT, not plain HC.
+- TC4420CPA DIP-8: join VDD pins 1/8 to LOAD_5V; join GND pins 4/5 to LOAD_GND;
+  join OUTPUT pins 6/7 before the single 100 ohm gate resistor. INPUT is pin 2;
+  pin 3 is NC and stays open. All three duplicate pairs must be connected
+  externally. Add 100 nF plus 1 uF local bypass across the VDD/GND groups. Gate,
+  driver-input and buffer-input pulldowns remain required; this text overview
+  omits their drawn symbols.
 - Amplifier SD must not be hard-strapped to VIN. GAIN is separate; both speaker
   wires go to amplifier outputs, neither to ground. See the breakout checks in
   [WIRING.md](WIRING.md#dip-ahct125-led-and-amplifier).
 - The KEY transistor cannot cold-start an unpowered ESP32. Retain an already
   verified 2N7000 implementation instead if fitted; do not build both alternatives.
+
+DIP numbering is top view, notch at the top and pin 1 upper-left; the solder-side
+view is mirrored. Use short socket-pad links or a common local rail for each
+group, keeping different groups separate. See the complete
+[pin-bridge tables](WIRING.md#tc4420cpa-dip-8-pin-bridges) before soldering.
 
 The diagram is an overview, not a replacement for protection terminals, capacitor
 placement and reset-state checks in [WIRING.md](WIRING.md). All load returns must
@@ -94,11 +103,12 @@ These are the closest useful block references, not a verified schematic of the
 complete K648/DevKit/breakout combination. Use this project's GPIO assignments;
 other boards' example GPIO numbers and power wiring are not interchangeable.
 
-- [Microchip TC4420/29 datasheet](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21419D.pdf):
-  package pin diagrams and driver connections. Use the TC4420 non-inverting
-  PDIP-8 version, connect all required supply/GND/output pins, and check NC pins.
-- [TI SN74AHCT125 datasheet](https://www.ti.com/document-viewer/SN74AHCT125/datasheet):
-  DIP-14 pin functions, active-LOW enables, bypass/layout and TTL input levels.
+- [Microchip TC4420/29 datasheet, page 1](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21419D.pdf#page=1):
+  TC4420 non-inverting DIP-8 pin diagram and the requirement to connect both pins
+  of every duplicate supply/GND/output pair; pin 3 is NC.
+- [TI SN74AHCT125 datasheet, page 3](https://www.ti.com/lit/ds/symlink/sn74ahct125.pdf#page=3):
+  DIP-14 pin diagram; later sections cover active-LOW enables, bypass/layout and
+  TTL input levels.
 - [Adafruit MAX98357A mono schematic](https://cdn-learn.adafruit.com/assets/assets/000/032/642/medium800/adafruit_products_schem.png?1464034817):
   close reference for the seven-pin I2S amplifier. Compare SD/GAIN resistors and
   supply capacitors with the actual breakout; do not assume a clone matches it.

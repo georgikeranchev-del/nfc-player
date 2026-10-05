@@ -274,25 +274,48 @@ more complicated. The current BOM and schematic remain a single-cell baseline.
 ## Motor: driven gate, low-side switching
 
 ```text
-GPIO27 -- TC4420 INPUT
+GPIO27 -- TC4420 INPUT (pin 2)
              |
            10k
              |
             GND
 
-TC4420 VDD -> LOAD_5V; GND pins -> LOAD_GND
+TC4420 pins 1 + 8 (VDD) -> LOAD_5V; pins 4 + 5 (GND) -> LOAD_GND
 100 nF + 1 uF between TC4420 VDD and GND, close to pins
-TC4420 OUTPUT -- 100 ohm -- IRLZ44N GATE
+TC4420 OUTPUT pins 6 + 7 -- one 100 ohm -- IRLZ44N GATE
 IRLZ44N GATE -- 10k ------- IRLZ44N SOURCE -> LOAD_GND
 IRLZ44N DRAIN ------------ MOTOR -
 LOAD_5V ----------------- MOTOR +
 
 Flyback diode: ANODE -> drain/motor -; CATHODE (band) -> motor +/LOAD_5V
-100 nF across motor terminals; 220 uF from LOAD_5V to LOAD_GND, NOT drain
+100 nF across motor terminals (brush suppression)
+220 uF (>=10 V): + -> LOAD_5V; - -> LOAD_GND, NOT drain/motor -
 ```
 
-Wire all required duplicate driver GND/output pins per its datasheet, leave NC
-pins as specified. Do not guess package pin numbers from another seller's board.
+### TC4420CPA DIP-8 pin bridges
+
+This table and the AHCT125 table below use **top-view numbering**: markings facing
+you, notch at the top, pin 1 upper-left, numbering counterclockwise. The solder-side
+view is mirrored. Disconnect battery and USB and remove the ICs before soldering
+socket links.
+
+| Pin(s) | Connection |
+|---|---|
+| 1 + 8 | Join VDD pins; connect to LOAD_5V. |
+| 4 + 5 | Join GND pins; connect to LOAD_GND. |
+| 6 + 7 | Join OUTPUT pins; through one 100 ohm resistor to IRLZ44N gate. |
+| 2 | INPUT from GPIO27, with a 10k resistor to LOAD_GND. |
+| 3 | NC; leave unconnected. |
+
+**All three duplicate pairs must be connected externally**, including both VDD
+pins, as required by the
+[Microchip datasheet, page 1](https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21419D.pdf#page=1).
+These are three separate groups; never bridge supply, ground and output together.
+Use short wire links between perfboard/socket pads, or a short common rail for
+each group, not large solder blobs. Do not bridge intervening pins. Keep the
+100 nF and 1 uF bypass capacitors in parallel between the joined VDD pins 1/8 and
+GND pins 4/5, close to the driver.
+
 TC4420 accepts TTL-style input at a 5 V supply; its minimum supply is 4.5 V.
 Gate/input pulldowns are mandatory even with brownout enabled. Check on-state
 drain voltage and temperature under the actual belt load. Protect against exposed
@@ -300,7 +323,8 @@ MOSFET tab contact: the IRLZ44N tab is electrically connected to drain.
 
 ## DIP AHCT125: LED and amplifier
 
-Pin numbers below are for SN74AHCT125N DIP-14, top-view datasheet numbering:
+Pin numbers below are for SN74AHCT125N DIP-14, top-view numbering verified against
+the [TI datasheet, page 3](https://www.ti.com/lit/ds/symlink/sn74ahct125.pdf#page=3):
 
 | Connection | Pin(s) |
 |---|---|
@@ -313,6 +337,17 @@ Pin numbers below are for SN74AHCT125N DIP-14, top-view datasheet numbering:
 | 2Y -> amplifier SD/SD_MODE | 6 |
 | Unused /3OE and /4OE -> VCC | 10, 13 |
 | Unused 3A and 4A -> GND; outputs unconnected | 9, 12; outputs 8, 11 |
+
+For this two-channel build, the socket bridge groups are:
+
+- **1, 4, 7, 9, 12 -> LOAD_GND.**
+- **10, 13, 14 -> LOAD_5V.**
+
+Keep these two groups separate. Short links to the same local rail count as
+connections; separate pin-to-pin jumpers are not needed when the rail already
+joins the pins. Inputs 2 and 5 retain their separate 10k pulldowns, not direct
+ground bridges. **Never join separate channel outputs 3, 6, 8 or 11 together.**
+Unused outputs 8 and 11 are each left open, not bridged to each other or a rail.
 
 Add 100 nF at pins 14/7. AHCT accepts 3.3 V HIGH when supplied at 5 V; plain HC
 does not offer the same guarantee. Keep LED data short. Tie all grounds together.
@@ -389,8 +424,9 @@ when it keeps the leads short. Put the 100 nF ceramic closest to the supply entr
 or IC supply pins; place bulk electrolytics nearby and mechanically support them.
 On socketed ICs, the bypass can be soldered to the perfboard/socket supply pads
 on the underside, clear of adjacent pins and insulated against accidental contact.
-For AHCT125, it goes between pins 14 and 7. Follow the TC4420's actual supply/GND
-pinout and retain its local 100 nF plus 1 uF ceramics.
+For AHCT125, it goes between pins 14 and 7. For TC4420CPA, put both the 100 nF
+and 1 uF ceramics across joined VDD pins 1/8 and joined GND pins 4/5. The capacitors
+connect between these groups; do not directly short the supply and ground groups.
 
 Do not put capacitors in series with a supply, across arbitrary signal pins, or
 between either amplifier speaker output and GND. The motor's small brush capacitor
