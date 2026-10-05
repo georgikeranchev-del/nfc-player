@@ -62,6 +62,9 @@ three plays, 600 ms motor ramp, 1 s audio fade, 5-minute idle sleep, 1.5 s encod
 hold then release to sleep. A held wake button must first be released to arm a
 new long press. Brownout protection is NOT disabled.
 
+The supplied tag UIDs and assigned songs are listed in the rendered
+[NFC tag table](NFC_TAGS.md). Use each UID exactly as shown for the MP3 filename.
+
 ## No-tag idle and USB
 
 After successful initialization with no tag, motor PWM stays at zero and the
