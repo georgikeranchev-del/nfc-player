@@ -93,19 +93,27 @@ and [hardware.json](hardware.json); edit all three when changing GPIO assignment
 
 Reference stack is pinned in [arduino-build.json](arduino-build.json). Core 2.0.17
 is the initial full-build target. The PWM wrapper accommodates 3.x, but that does
-not certify every dependency on 3.x. From this project root in PowerShell:
+not certify every dependency on 3.x. On a new Windows PC, install Arduino IDE
+(the script finds its bundled CLI) or install `arduino-cli`, clone this repository,
+open PowerShell in the repository root, then run:
+
+```powershell
+.\scripts\Build-Arduino.ps1 -Install
+```
+
+`-Install` reads `arduino-build.json` and installs the pinned ESP32 core and
+libraries before compiling. It needs internet access the first time. To run the
+checks separately, use:
 
 ```powershell
 ./scripts/Check-Design.ps1
 ./scripts/Test-DesignChecks.ps1
 ./scripts/Test-Control.ps1
-./scripts/Build-Arduino.ps1 -Install
 ```
 
-Native tests require Visual Studio C++ tools and Windows SDK. Arduino build
-requires `arduino-cli` and network access on first install; the script also finds
-the bundled Arduino IDE CLI on Windows. `-Install` explicitly installs pinned
-dependencies. Without it, the script only compiles. Neither command uploads.
+Native tests require Visual Studio C++ tools and Windows SDK. Without `-Install`,
+the build script only compiles and expects the pinned dependencies to be present.
+Neither build command uploads.
 
 [GitHub Actions](.github/workflows/checks.yml) runs design rules, rule-mutation
 tests, native control tests and a separate real Arduino compilation. Push the
