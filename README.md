@@ -5,6 +5,15 @@ the new standalone project and the root to upload to GitHub. No repository was
 initialized and no hardware was flashed. Files beside this folder are historical
 references; the older monolithic sketch and KiCad files are not the build inputs.
 
+## Licensing
+
+Original project code and documentation in this branch are licensed under
+GPL-3.0-or-later; see [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope and dependency
+notices. That license does not grant rights to separately published third-party
+material; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency
+notices and redistribution guidance.
+
 ## Detected ESP32
 
 User-reported detection output:
