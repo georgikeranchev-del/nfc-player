@@ -43,7 +43,7 @@ $pinout = Get-Content -LiteralPath (Join-Path $Root 'PINOUT.md') -Raw
 $table = [regex]::Match($pinout, '(?s)<!-- PINOUT:BEGIN -->(.*?)<!-- PINOUT:END -->')
 if (-not $table.Success) { throw 'PINOUT table markers missing.' }
 $documented = @{}
-foreach ($row in [regex]::Matches($table.Groups[1].Value, '(?m)^\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\w+)\s*\|[^\r\n|]+\|\s*$')) {
+foreach ($row in [regex]::Matches($table.Groups[1].Value, '(?m)^\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\w+)\s*\|[^\r\n]*\|\s*$')) {
     $symbol = $row.Groups[1].Value
     if ($documented.ContainsKey($symbol) -or -not $pins.ContainsKey($symbol) -or
         $pins[$symbol] -ne [int]$row.Groups[2].Value -or $signals[$symbol] -ne $row.Groups[3].Value) {

@@ -12,27 +12,38 @@ pin map. Connection notes and the diagram are not an electrically checked netlis
 Component IDs correspond to [BOM.csv](BOM.csv).
 
 <!-- PINOUT:BEGIN -->
-| Symbol | GPIO | Component | Connection and conditions |
-|---|---|---|---|
-| AMP_ENABLE | 2 | U_BUFFER | SN74AHCT125N 2A, pin 5, with 10k to GND; 2Y, pin 6, goes to amplifier SD/SD_MODE. Never connect GPIO2 directly to amplifier SD. Boot-strap review required. |
-| ENCODER_SW | 4 | ENC1 | Encoder push switch to GND; active LOW. Wakes a powered sleeping ESP32, not a shut-down IP5310. |
-| PN532_SS | 5 | U_NFC | PN532 SS/SSEL; set the module to SPI. Verify reset-state module pulls on this boot-strap pin. |
-| SD_CS | 13 | U_SD | SD module CS. |
-| SD_SCK | 14 | U_SD | SD module SCK/CLK. |
-| SD_MOSI | 15 | U_SD | SD module MOSI/DI. Verify reset-state pulls on this boot-strap pin. |
-| SD_MISO | 16 | U_SD | SD module MISO/DO; GPIO16 must not be occupied by PSRAM. |
-| IP5310_KEY | 17 | Q_KEY | 1k to 2N3904 base; 10k base-to-emitter; emitter to system GND; collector to IP5310 KEY. Never connect KEY directly to a GPIO. |
-| PN532_SCK | 18 | U_NFC | PN532 SCK. |
-| PN532_MISO | 19 | U_NFC | PN532 MISO. |
-| LED_DATA | 21 | U_BUFFER | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
-| I2S_DOUT | 22 | U_AMP | MAX98357A DIN. |
-| PN532_MOSI | 23 | U_NFC | PN532 MOSI. |
-| I2S_LRC | 25 | U_AMP | MAX98357A LRC/WS. |
-| I2S_BCLK | 26 | U_AMP | MAX98357A BCLK. |
-| MOTOR_GATE | 27 | U_GATE | TC4420CPA INPUT pin 2 with 10k to GND; joined OUTPUT pins 6/7 through one 100 ohm resistor to IRLZ44N gate. Keep 10k directly between gate and source. GPIO27 does not drive the MOSFET gate directly. |
-| ENCODER_CLK | 32 | ENC1 | Encoder A/CLK; common to GND. |
-| ENCODER_DT | 33 | ENC1 | Encoder B/DT; common to GND. |
+| Symbol | GPIO | Component | Wire color | Connection and conditions |
+|---|---|---|---|---|
+| AMP_ENABLE | 2 | U_BUFFER | Green | SN74AHCT125N 2A, pin 5, with 10k to GND; 2Y, pin 6, goes to amplifier SD/SD_MODE. Never connect GPIO2 directly to amplifier SD. Boot-strap review required. |
+| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes a powered sleeping ESP32, not a shut-down IP5310. |
+| PN532_SS | 5 | U_NFC | White | PN532 SS/SSEL; set the module to SPI. Verify reset-state module pulls on this boot-strap pin. |
+| SD_CS | 13 | U_SD | White | SD module CS. |
+| SD_SCK | 14 | U_SD | Blue | SD module SCK/CLK. |
+| SD_MOSI | 15 | U_SD | Yellow | SD module MOSI/DI. Verify reset-state pulls on this boot-strap pin. |
+| SD_MISO | 16 | U_SD | Brown | SD module MISO/DO; GPIO16 must not be occupied by PSRAM. |
+| IP5310_KEY | 17 | Q_KEY | Green | 1k to 2N3904 base; 10k base-to-emitter; emitter to system GND; collector to IP5310 KEY. Never connect KEY directly to a GPIO. |
+| PN532_SCK | 18 | U_NFC | Blue | PN532 SCK. |
+| PN532_MISO | 19 | U_NFC | Brown | PN532 MISO. |
+| LED_DATA | 21 | U_BUFFER | Pink | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
+| I2S_DOUT | 22 | U_AMP | Pink | MAX98357A DIN. |
+| PN532_MOSI | 23 | U_NFC | Yellow | PN532 MOSI. |
+| I2S_LRC | 25 | U_AMP | Pink | MAX98357A LRC/WS. |
+| I2S_BCLK | 26 | U_AMP | Blue | MAX98357A BCLK. |
+| MOTOR_GATE | 27 | U_GATE | Green | TC4420CPA INPUT pin 2 with 10k to GND; joined OUTPUT pins 6/7 through one 100 ohm resistor to IRLZ44N gate. Keep 10k directly between gate and source. GPIO27 does not drive the MOSFET gate directly. |
+| ENCODER_CLK | 32 | ENC1 | Green | Encoder A/CLK; common to GND. |
+| ENCODER_DT | 33 | ENC1 | Green | Encoder B/DT; common to GND. |
 <!-- PINOUT:END -->
+
+## Signal wire color key
+
+Use red for positive supply/VCC (including 5V) and black for GND/negative.
+Use the same color for the same signal role at each component: white for CS/SS,
+blue for clocks (SPI SCK and I2S BCLK), brown for MISO, yellow for MOSI, green
+for control/encoder lines, and pink for LED/I2S data and sync. For example, both
+SD_MISO and PN532_MISO use brown, and both MOSI lines use yellow. Matching color
+does not mean separate GPIO nets are electrically joined; follow each symbol and
+GPIO in the table. Keep battery protection terminals distinct; black denotes
+the negative node shown, not permission to bypass the PCM.
 
 All ESP32-side logic is **3.3 V, not 5 V tolerant**. GPIO12 and flash GPIO6-11 are
 forbidden in this design. The retained straps 2, 5 and 15 are reviewed in

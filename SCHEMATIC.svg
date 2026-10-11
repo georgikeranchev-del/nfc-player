@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1660" viewBox="0 0 1640 1660" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1680" viewBox="0 0 1640 1680" role="img" aria-labelledby="title desc">
   <title id="title">NFC player battery-only connection drawing</title>
-  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
+  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. Signal wire colors match by role across components. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
   <defs>
     <style>
       text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
@@ -11,15 +11,24 @@
       .tiny { font-size: 12px; }
       .muted { fill: #53616a; }
       .warning { fill: #9e2525; font-weight: 600; }
+      .positive { fill: #b62c35; }
       .box { fill: #f7f9fa; stroke: #596770; stroke-width: 1.5; }
-      .wire { fill: none; stroke: #26343c; stroke-width: 2; }
+      .wire { fill: none; stroke: #000000; stroke-width: 2; }
       .supply { fill: none; stroke: #b62c35; stroke-width: 2.5; }
-      .signal { fill: none; stroke: #067d8a; stroke-width: 2; }
+      .speaker-positive { fill: none; stroke: #b62c35; stroke-width: 2; }
+      .speaker-negative { fill: none; stroke: #000000; stroke-width: 2; }
+      .signal { fill: none; stroke-width: 2; }
+      .signal.white { stroke: #f8f9fb; filter: drop-shadow(0 0 1px rgba(38, 52, 60, 0.8)); }
+      .signal.blue { stroke: #2d6cdf; }
+      .signal.brown { stroke: #8a5a3b; }
+      .signal.yellow { stroke: #d9b700; }
+      .signal.green { stroke: #2da44e; }
+      .signal.pink { stroke: #d34e9e; }
       .rule { stroke: #c5cdd1; stroke-width: 1; }
-      .dot { fill: #26343c; }
+      .dot { fill: #000000; }
     </style>
   </defs>
-  <rect width="1640" height="1660" fill="white"/>
+  <rect width="1640" height="1680" fill="white"/>
   <text x="40" y="45" class="title">NFC Player: Battery-Only Connection Drawing</text>
   <text x="40" y="75">TC4420CPA + SN74AHCT125N | GPIO numbers, not physical DevKit header positions | 4 ohm / 3 W mono speaker</text>
   <text x="40" y="101" class="small warning">Functional reference, not an electrically verified module schematic. Confirm breakout supply voltages and exact package pinouts.</text>
@@ -29,7 +38,7 @@
   <text x="70" y="219" class="part">1S Li-ion cell</text>
   <text x="70" y="245" class="small">3.6/3.7 V nominal</text>
   <text x="70" y="272" class="small">4.20 V charge type</text>
-  <text x="225" y="200" class="small">+</text>
+  <text x="225" y="200" class="small positive">+</text>
   <text x="225" y="285" class="small">-</text>
   <path d="M220 210 H255 M345 210 H390" class="supply"/>
   <rect x="255" y="200" width="90" height="20" fill="white" stroke="#b62c35" stroke-width="2"/>
@@ -81,7 +90,10 @@
   <text x="580" y="486" class="part">SD module</text>
   <text x="580" y="514" class="small">Supply: check breakout</text>
   <text x="580" y="542" class="small">GND: LOAD_GND</text>
-  <path d="M280 520 H560" class="signal"/>
+  <path d="M280 512 H560" class="signal white"/>
+  <path d="M280 520 H560" class="signal blue"/>
+  <path d="M280 528 H560" class="signal yellow"/>
+  <path d="M280 536 H560" class="signal brown"/>
   <text x="300" y="482" class="small">GPIO13: CS | GPIO14: SCK</text>
   <text x="300" y="506" class="small">GPIO15: MOSI | GPIO16: MISO</text>
 
@@ -89,7 +101,10 @@
   <text x="580" y="631" class="part">PN532 in SPI mode</text>
   <text x="580" y="659" class="small">Supply: check breakout</text>
   <text x="580" y="687" class="small">GND: LOAD_GND</text>
-  <path d="M280 665 H560" class="signal"/>
+  <path d="M280 657 H560" class="signal white"/>
+  <path d="M280 665 H560" class="signal blue"/>
+  <path d="M280 673 H560" class="signal yellow"/>
+  <path d="M280 681 H560" class="signal brown"/>
   <text x="300" y="626" class="small">GPIO5: SS | GPIO18: SCK</text>
   <text x="300" y="650" class="small">GPIO23: MOSI | GPIO19: MISO</text>
 
@@ -97,7 +112,7 @@
   <text x="580" y="775" class="part">Encoder + push</text>
   <text x="580" y="800" class="small">Common / other SW: GND</text>
   <text x="580" y="827" class="small">VCC: 3V3 only if needed</text>
-  <path d="M280 808 H560" class="signal"/>
+  <path d="M280 800 H560 M280 808 H560 M280 816 H560" class="signal green"/>
   <text x="300" y="769" class="small">GPIO32: CLK | GPIO33: DT</text>
   <text x="300" y="793" class="small">GPIO4: SW (active LOW)</text>
 
@@ -125,9 +140,9 @@
     <path d="M1540 465 H1580 V666" class="supply"/>
     <path d="M1562 666 H1598 M1562 674 H1598" class="wire"/>
     <path d="M1580 674 V785 H1390" class="wire"/>
-    <circle cx="1540" cy="465" r="3" class="dot"/>
+    <circle cx="1540" cy="465" r="3" fill="#b62c35"/>
     <circle cx="1390" cy="785" r="3" class="dot"/>
-    <text x="1560" y="652" class="small">+</text>
+    <text x="1560" y="652" class="small positive">+</text>
     <text x="1560" y="698" class="small">-</text>
     <text x="1470" y="666" class="small">220 uF</text>
     <text x="1470" y="690" class="small">&gt;=10 V</text>
@@ -137,7 +152,7 @@
   <text x="922" y="665" class="part">TC4420CPA</text>
   <text x="922" y="691" class="small">1+8 VDD: LOAD_5V</text>
   <text x="922" y="714" class="small">4+5 GND: LOAD_GND</text>
-  <path d="M855 680 H905 M1110 680 H1155 M1235 680 H1330" class="signal"/>
+  <path d="M855 680 H905 M1110 680 H1155 M1235 680 H1330" class="signal green"/>
   <text x="853" y="620" class="small">GPIO27</text>
   <text x="853" y="649" class="tiny">2: INPUT</text>
   <text x="1118" y="706" class="tiny">6+7: OUTPUT</text>
@@ -167,7 +182,8 @@
   <text x="526" y="1035" class="small">1Y: 3</text>
   <text x="287" y="1110" class="small">5: 2A</text>
   <text x="526" y="1110" class="small">2Y: 6</text>
-  <path d="M60 1025 H270 M610 1025 H675 M735 1025 H790 M60 1100 H270 M610 1100 H745 V1245 H790" class="signal"/>
+  <path d="M60 1025 H270 M610 1025 H675 M735 1025 H790" class="signal pink"/>
+  <path d="M60 1100 H270 M610 1100 H745 V1245 H790" class="signal green"/>
   <text x="65" y="1012">GPIO21</text>
   <text x="65" y="1055" class="small">10k input-to-GND</text>
   <text x="65" y="1087">GPIO2</text>
@@ -195,15 +211,17 @@
   <text x="800" y="1350" class="small">DIN</text>
   <text x="800" y="1380" class="small">VIN: LOAD_5V</text>
   <text x="800" y="1402" class="small">GND: LOAD_GND</text>
-  <path d="M630 1280 H790 M630 1310 H790 M630 1340 H790" class="signal"/>
+  <path d="M630 1280 H790" class="signal blue"/>
+  <path d="M630 1310 H790 M630 1340 H790" class="signal pink"/>
   <text x="640" y="1271" class="small">GPIO26</text>
   <text x="640" y="1301" class="small">GPIO25</text>
   <text x="640" y="1331" class="small">GPIO22</text>
   <text x="315" y="1320" class="small">Amp GAIN is separate from SD.</text>
   <text x="315" y="1345" class="small">Confirm SD is not hard-strapped to VIN.</text>
   <text x="315" y="1370" class="small">Amp bypass: 100 uF + 100 nF.</text>
-  <path d="M855 1415 V1470 M945 1415 V1470" class="wire"/>
-  <text x="838" y="1446" class="small">+</text>
+  <path d="M855 1415 V1470" class="speaker-positive"/>
+  <path d="M945 1415 V1470" class="speaker-negative"/>
+  <text x="838" y="1446" class="small positive">+</text>
   <text x="952" y="1446" class="small">-</text>
   <rect x="800" y="1470" width="215" height="65" class="box"/>
   <text x="818" y="1497" class="part">4 ohm / 3 W mono</text>
@@ -215,7 +233,7 @@
   <text x="1374" y="1040" class="small">B</text>
   <text x="1440" y="974" class="tiny">C</text>
   <text x="1425" y="1079" class="tiny">E</text>
-  <path d="M1095 1030 H1195 M1275 1030 H1365" class="signal"/>
+  <path d="M1095 1030 H1195 M1275 1030 H1365" class="signal green"/>
   <rect x="1195" y="1020" width="80" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="1095" y="1015" class="small">GPIO17</text>
   <text x="1220" y="1010" class="small">1k</text>
@@ -246,4 +264,14 @@
   <text x="40" y="1590" class="small">Named LOAD_5V / LOAD_GND nets connect across panels. SPI lines are grouped; individual assignments are in PINOUT.md.</text>
   <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
   <text x="40" y="1640" class="small warning">No charging or programming USB is included in this battery-only drawing. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
+  <g aria-label="Signal and power wire color key">
+    <path d="M40 1660 H58" class="signal white"/><text x="64" y="1665" class="tiny">CS/SS</text>
+    <path d="M155 1660 H173" class="signal blue"/><text x="179" y="1665" class="tiny">clocks (SCK/BCLK)</text>
+    <path d="M365 1660 H383" class="signal brown"/><text x="389" y="1665" class="tiny">MISO</text>
+    <path d="M485 1660 H503" class="signal yellow"/><text x="509" y="1665" class="tiny">MOSI</text>
+    <path d="M605 1660 H623" class="signal green"/><text x="629" y="1665" class="tiny">controls / encoder</text>
+    <path d="M820 1660 H838" class="signal pink"/><text x="844" y="1665" class="tiny">LED / I2S data and sync</text>
+    <path d="M1065 1660 H1083" class="wire"/><text x="1089" y="1665" class="tiny">GND / negative</text>
+    <path d="M1225 1660 H1243" class="supply"/><text x="1249" y="1665" class="tiny">VCC / 5V positive</text>
+  </g>
 </svg>

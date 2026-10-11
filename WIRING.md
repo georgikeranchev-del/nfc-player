@@ -12,6 +12,18 @@ module identity. Use [PINOUT.md](PINOUT.md) for the complete GPIO table, GPIO16/
 restrictions and compact connection schematic. Full reported chip details are in
 [README.md](README.md#detected-esp32).
 
+## Signal wire colors
+
+Use red for positive supply/VCC (including 5V) and black for GND/negative.
+Color signal wires by role consistently across components: white for CS/SS, blue
+for clocks (SPI SCK and I2S BCLK), brown for MISO, yellow for MOSI, green for
+control/encoder lines, and pink for LED/I2S data and sync. Therefore SD and PN532
+MISO use the same brown wire, and both MOSI lines use yellow. Same color does not
+mean different GPIO nets are connected together; keep each routed to its pin as
+shown in [PINOUT.md](PINOUT.md) and [SCHEMATIC.svg](SCHEMATIC.svg). Keep raw cell
+terminals on the correct sides of the PCM; black does not authorize bypassing
+battery protection or joining raw B- to system GND.
+
 ## What to buy
 
 - **1 x SN74AHCT125N, DIP-14, plus socket:** LED level shift and amp SD isolation.
