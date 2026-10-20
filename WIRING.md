@@ -333,6 +333,65 @@ Gate/input pulldowns are mandatory even with brownout enabled. Check on-state
 drain voltage and temperature under the actual belt load. Protect against exposed
 MOSFET tab contact: the IRLZ44N tab is electrically connected to drain.
 
+### Practical perfboard placement and solder order
+
+Use this as a placement guide, not a scale drawing. Keep the TC4420 socket and
+its small-signal input on the control side; put the MOSFET and motor/power
+terminals near the board edge. Leave a little working room around the socket for
+the three pin-bridge groups and bypass capacitors.
+
+```text
+COMPONENT SIDE — notch upward; pin numbers are top-view
+
+                        TC4420 socket, notch up
+                       ┌──────────────────────┐
+ LOAD_5V --------------│ 1 VDD         VDD 8 │-------------- LOAD_5V
+ GPIO27 ---------------│ 2 IN           OUT 7│--+
+                       │ 3 NC           OUT 6│--+--100 ohm--MOSFET GATE
+ LOAD_GND -------------│ 4 GND         GND 5 │-------------- LOAD_GND
+                       └──────────────────────┘
+ GPIO27 / pin-2 node -- 10k -- LOAD_GND
+ 100 nF + 1 uF across the LOAD_5V and LOAD_GND groups, near the socket
+
+ MOTOR / POWER EDGE:
+ LOAD_5V -> MOTOR +       MOSFET SOURCE -> LOAD_GND
+ MOTOR - -> MOSFET DRAIN  10k from MOSFET GATE to SOURCE
+ diode across motor terminals, band toward MOTOR +
+```
+
+The socket's solder-side view is mirrored. Follow the numbered socket pads and
+verify the notch orientation before soldering; do not copy the component-side
+positions by eye while looking at the underside.
+
+Recommended order:
+
+1. With battery and USB disconnected, mark the socket notch and place the socket,
+   motor MOSFET, and terminal blocks. Make sure the MOSFET tab cannot touch other
+   metal or exposed conductors.
+2. Solder and inspect the socket links for pins 1/8 (VDD), 4/5 (GND), and 6/7
+   (OUTPUT) as separate groups. Keep pin 3 unconnected. Check the pin-bridge
+   table above against the exact TC4420 package datasheet.
+3. Add the 100 nF and 1 uF bypass capacitors close to the socket, each across the
+   VDD and GND groups. Keep the leads short; neither capacitor goes in series.
+4. Wire GPIO27 to pin 2 and fit its 10k pulldown from that input node to
+   LOAD_GND. Fit the single 100 ohm resistor between joined output pins 6/7 and
+   the MOSFET gate. Put the other 10k directly between the MOSFET gate and source.
+5. Connect MOSFET source to the LOAD_GND power return and drain to MOTOR -;
+   connect MOTOR + to LOAD_5V. Place the flyback diode across the motor terminals
+   (band toward MOTOR +). Put the 220 uF capacitor across LOAD_5V and LOAD_GND
+   near the motor supply branch, not from drain to ground. The separate 100 nF
+   brush-suppression capacitor goes across the motor terminals.
+6. Keep the motor's LOAD_5V and LOAD_GND current path short and adequately rated.
+   Route it directly to the power distribution/terminal points, not through the
+   TC4420 socket, GPIO connector, or a long chain of thin perfboard pads. Keep
+   GPIO27/input wiring away from the motor and gate wiring; route motor leads
+   together.
+7. Before inserting the IC or applying power, inspect for solder bridges and use
+   a meter to check that LOAD_5V is not shorted to LOAD_GND. Verify diode
+   orientation, MOSFET G/D/S orientation, resistor values, and continuity of
+   each pin group against the drawing. Then continue with the staged checks in
+   [MANUAL_TESTS.md](MANUAL_TESTS.md#perfboard-assembly-and-acceptance).
+
 ## DIP AHCT125: LED and amplifier
 
 Pin numbers below are for SN74AHCT125N DIP-14, top-view numbering verified against
