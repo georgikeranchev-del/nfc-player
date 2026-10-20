@@ -10,6 +10,16 @@ interface, a turntable, and an enclosure for the ESP32/NFC/audio electronics.
 Compatibility with the actual parts has not been established for the linked
 models.
 
+## Proposed enclosure layout
+
+The [conceptual enclosure layout](ENCLOSURE_LAYOUT.svg) places the PN532 antenna
+under the platter center, keeps the battery and motor away from the antenna, and
+puts the K648 charging and DevKit programming USB connectors on the same side
+wall for access. It is a top-down placement suggestion, not a dimensioned model
+or validated mechanical/electrical design. Verify clearances, antenna read range,
+connector fit, and the USB power-isolation procedure with the actual parts before
+making enclosure cutouts.
+
 ## Drive and pulleys
 
 | Reference | Potential use | Source |

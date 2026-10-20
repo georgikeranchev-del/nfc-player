@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="820" viewBox="0 0 1160 820" role="img" aria-labelledby="title desc">
+  <title id="title">NFC player conceptual enclosure layout</title>
+  <desc id="desc">Top-down conceptual layout with an NFC antenna centered beneath the platter, the motor near the platter edge, electronics and battery offset from the antenna, and separate charging and programming USB ports on one side wall. Not to scale.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", sans-serif; fill: #20262b; }
+      .title { font-size: 28px; font-weight: 700; }
+      .heading { font-size: 18px; font-weight: 700; }
+      .label { font-size: 15px; font-weight: 600; }
+      .small { font-size: 13px; }
+      .tiny { font-size: 11px; }
+      .muted { fill: #53616a; }
+      .warning { fill: #9e2525; font-weight: 700; }
+      .case { fill: #f7f9fa; stroke: #596770; stroke-width: 3; }
+      .platter { fill: #e9eef1; stroke: #52616a; stroke-width: 3; }
+      .component { fill: #fff; stroke: #65747d; stroke-width: 2; }
+      .board { fill: #dcebe1; stroke: #4c7559; stroke-width: 2; }
+      .power { fill: #fff0e2; stroke: #ad6c35; stroke-width: 2; }
+      .nfc { fill: #e7e3fb; stroke: #6557a6; stroke-width: 3; }
+      .route { fill: none; stroke: #52616a; stroke-width: 2; stroke-dasharray: 7 6; }
+      .belt { fill: none; stroke: #7a4f2e; stroke-width: 5; }
+      .divider { stroke: #c5cdd1; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1160" height="820" fill="#fff"/>
+  <text x="40" y="46" class="title">NFC Player: Conceptual Enclosure Layout</text>
+  <text x="40" y="73" class="small muted">Top view with cover and platter shown transparent/removed for placement. Concept only; not to scale.</text>
+
+  <rect x="40" y="100" width="850" height="600" rx="28" class="case"/>
+  <text x="62" y="129" class="small muted">ENCLOSURE / INTERNAL PLACEMENT</text>
+
+  <circle cx="320" cy="394" r="220" class="platter"/>
+  <circle cx="320" cy="394" r="194" fill="none" stroke="#b8c3c9" stroke-width="1.5"/>
+  <circle cx="320" cy="394" r="8" fill="#52616a"/>
+  <text x="320" y="166" text-anchor="middle" class="heading">PLATTER</text>
+  <text x="320" y="190" text-anchor="middle" class="small muted">tag placement centered over spindle</text>
+
+  <circle cx="320" cy="394" r="78" class="nfc"/>
+  <circle cx="320" cy="394" r="63" fill="none" stroke="#8c80c9" stroke-width="2"/>
+  <text x="320" y="383" text-anchor="middle" class="label">PN532 ANTENNA</text>
+  <text x="320" y="405" text-anchor="middle" class="small">centered under tag</text>
+  <text x="320" y="426" text-anchor="middle" class="tiny muted">keep metal / battery clear</text>
+
+  <rect x="278" y="592" width="84" height="42" rx="5" class="component"/>
+  <text x="320" y="609" text-anchor="middle" class="tiny">PN532 board</text>
+  <text x="320" y="625" text-anchor="middle" class="tiny muted">short lead to coil</text>
+
+  <rect x="509" y="537" width="102" height="62" rx="8" class="component"/>
+  <text x="560" y="560" text-anchor="middle" class="label">N20 MOTOR</text>
+  <text x="560" y="581" text-anchor="middle" class="tiny muted">at platter rim</text>
+  <circle cx="517" cy="568" r="9" fill="#fff" stroke="#65747d" stroke-width="2"/>
+  <path d="M517 559 C454 528 432 465 415 442 M517 577 C468 559 443 526 428 507" class="belt"/>
+  <text x="471" y="535" text-anchor="middle" class="tiny muted">belt</text>
+
+  <rect x="650" y="147" width="190" height="68" rx="8" class="power"/>
+  <text x="745" y="175" text-anchor="middle" class="label">BATTERY + HOLDER</text>
+  <text x="745" y="197" text-anchor="middle" class="small">secured; offset from antenna</text>
+
+  <rect x="615" y="253" width="225" height="92" rx="8" class="board"/>
+  <text x="727" y="279" text-anchor="middle" class="label">ESP32 DEVKIT</text>
+  <text x="727" y="301" text-anchor="middle" class="small">SD breakout beside / accessible</text>
+  <rect x="635" y="313" width="113" height="20" rx="3" fill="#fff" stroke="#65747d"/>
+  <text x="691" y="328" text-anchor="middle" class="tiny">SD CARD ACCESS</text>
+  <path d="M840 294 H890" stroke="#52616a" stroke-width="3"/>
+  <rect x="890" y="281" width="30" height="26" rx="4" fill="#dcebe1" stroke="#4c7559" stroke-width="2"/>
+  <text x="932" y="292" class="small">ESP32 programming</text>
+  <text x="932" y="309" class="small">USB side port</text>
+
+  <rect x="615" y="374" width="225" height="78" rx="8" class="power"/>
+  <text x="727" y="401" text-anchor="middle" class="label">IP5310 / K648</text>
+  <text x="727" y="423" text-anchor="middle" class="small">load switch + power distribution</text>
+  <path d="M840 414 H890" stroke="#ad6c35" stroke-width="3"/>
+  <rect x="890" y="401" width="30" height="26" rx="4" fill="#fff0e2" stroke="#ad6c35" stroke-width="2"/>
+  <text x="932" y="412" class="small">K648 charging</text>
+  <text x="932" y="429" class="small">USB side port</text>
+
+  <rect x="630" y="486" width="190" height="62" rx="8" class="board"/>
+  <text x="725" y="511" text-anchor="middle" class="label">BUFFER + MOTOR DRIVER</text>
+  <text x="725" y="532" text-anchor="middle" class="small">near power / motor wiring</text>
+
+  <circle cx="751" cy="612" r="43" class="component"/>
+  <circle cx="751" cy="612" r="26" fill="none" stroke="#aab5bb" stroke-width="2"/>
+  <text x="751" y="608" text-anchor="middle" class="label">SPEAKER</text>
+  <text x="751" y="627" text-anchor="middle" class="tiny">twisted pair</text>
+
+  <path d="M400 394 C480 394 523 350 615 330" class="route"/>
+  <text x="505" y="367" class="tiny muted">short NFC / SPI signals</text>
+  <path d="M615 428 C584 459 574 492 560 537" class="route"/>
+  <text x="538" y="482" class="tiny muted">motor pair away from antenna</text>
+
+  <line x1="40" y1="724" x2="1120" y2="724" class="divider"/>
+  <text x="50" y="752" class="heading">Placement and use notes</text>
+  <text x="50" y="778" class="small">• Tune antenna height and read range with the actual platter, tag, and enclosure before final mounting.</text>
+  <text x="50" y="800" class="small warning">• USB ports are separate power paths: for programming, disconnect the complete player harness; do not assume both USBs are safe together.</text>
+</svg>

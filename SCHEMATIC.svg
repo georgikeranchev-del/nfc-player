@@ -182,7 +182,7 @@
   <text x="526" y="1035" class="small">1Y: 3</text>
   <text x="287" y="1110" class="small">5: 2A</text>
   <text x="526" y="1110" class="small">2Y: 6</text>
-  <path d="M60 1025 H270 M610 1025 H675 M735 1025 H790" class="signal pink"/>
+  <path d="M60 1025 H270 M610 1025 H675 M735 1025 H790" class="signal white"/>
   <path d="M60 1100 H270 M610 1100 H745 V1245 H790" class="signal green"/>
   <text x="65" y="1012">GPIO21</text>
   <text x="65" y="1055" class="small">10k input-to-GND</text>
@@ -265,12 +265,12 @@
   <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
   <text x="40" y="1640" class="small warning">No charging or programming USB is included in this battery-only drawing. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
   <g aria-label="Signal and power wire color key">
-    <path d="M40 1660 H58" class="signal white"/><text x="64" y="1665" class="tiny">CS/SS</text>
+    <path d="M40 1660 H58" class="signal white"/><text x="64" y="1665" class="tiny">CS/SS, LED data</text>
     <path d="M155 1660 H173" class="signal blue"/><text x="179" y="1665" class="tiny">clocks (SCK/BCLK)</text>
     <path d="M365 1660 H383" class="signal brown"/><text x="389" y="1665" class="tiny">MISO</text>
     <path d="M485 1660 H503" class="signal yellow"/><text x="509" y="1665" class="tiny">MOSI</text>
     <path d="M605 1660 H623" class="signal green"/><text x="629" y="1665" class="tiny">controls / encoder</text>
-    <path d="M820 1660 H838" class="signal pink"/><text x="844" y="1665" class="tiny">LED / I2S data and sync</text>
+    <path d="M820 1660 H838" class="signal pink"/><text x="844" y="1665" class="tiny">I2S data and sync</text>
     <path d="M1065 1660 H1083" class="wire"/><text x="1089" y="1665" class="tiny">GND / negative</text>
     <path d="M1225 1660 H1243" class="supply"/><text x="1249" y="1665" class="tiny">VCC / 5V positive</text>
   </g>

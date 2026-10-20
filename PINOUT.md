@@ -24,7 +24,7 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | IP5310_KEY | 17 | Q_KEY | Green | 1k to 2N3904 base; 10k base-to-emitter; emitter to system GND; collector to IP5310 KEY. Never connect KEY directly to a GPIO. |
 | PN532_SCK | 18 | U_NFC | Blue | PN532 SCK. |
 | PN532_MISO | 19 | U_NFC | Brown | PN532 MISO. |
-| LED_DATA | 21 | U_BUFFER | Pink | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
+| LED_DATA | 21 | U_BUFFER | White | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
 | I2S_DOUT | 22 | U_AMP | Pink | MAX98357A DIN. |
 | PN532_MOSI | 23 | U_NFC | Yellow | PN532 MOSI. |
 | I2S_LRC | 25 | U_AMP | Pink | MAX98357A LRC/WS. |
@@ -37,13 +37,13 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 ## Signal wire color key
 
 Use red for positive supply/VCC (including 5V) and black for GND/negative.
-Use the same color for the same signal role at each component: white for CS/SS,
-blue for clocks (SPI SCK and I2S BCLK), brown for MISO, yellow for MOSI, green
-for control/encoder lines, and pink for LED/I2S data and sync. For example, both
-SD_MISO and PN532_MISO use brown, and both MOSI lines use yellow. Matching color
-does not mean separate GPIO nets are electrically joined; follow each symbol and
-GPIO in the table. Keep battery protection terminals distinct; black denotes
-the negative node shown, not permission to bypass the PCM.
+Use the same color for the same signal role at each component: white for CS/SS
+and LED data, blue for clocks (SPI SCK and I2S BCLK), brown for MISO, yellow for
+MOSI, green for control/encoder lines, and pink for I2S data and sync. For
+example, both SD_MISO and PN532_MISO use brown, and both MOSI lines use yellow.
+Matching color does not mean separate GPIO nets are electrically joined; follow
+each symbol and GPIO in the table. Keep battery protection terminals distinct;
+black denotes the negative node shown, not permission to bypass the PCM.
 
 All ESP32-side logic is **3.3 V, not 5 V tolerant**. GPIO12 and flash GPIO6-11 are
 forbidden in this design. The retained straps 2, 5 and 15 are reviewed in
