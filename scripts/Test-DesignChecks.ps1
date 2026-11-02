@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $checker = Join-Path $PSScriptRoot 'Check-Design.ps1'
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('nfc-design-checks-' + [guid]::NewGuid().ToString('N'))
-$cases = @('gpio12', 'duplicate', 'unsupported', 'pinout', 'pinout-owner', 'bom', 'pulldown', 'strap', 'brownout')
+$cases = @('gpio12', 'duplicate', 'unsupported', 'adc-pin', 'adc-output', 'pinout', 'pinout-owner', 'bom', 'pulldown', 'strap', 'brownout')
 try {
     foreach ($case in $cases) {
         $fixture = Join-Path $temporary $case
@@ -16,29 +16,39 @@ try {
         $expected = ''
         switch ($case) {
             'gpio12' {
-                $text = (Get-Content $pinsPath -Raw).Replace('IP5310_KEY = 17;', 'IP5310_KEY = 12;')
+                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 12;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'GPIO12'
             }
             'duplicate' {
-                $text = (Get-Content $pinsPath -Raw).Replace('IP5310_KEY = 17;', 'IP5310_KEY = 27;')
+                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 27;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Duplicate GPIO'
             }
             'unsupported' {
-                $text = (Get-Content $pinsPath -Raw).Replace('IP5310_KEY = 17;', 'IP5310_KEY = 20;')
+                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 20;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Unsupported'
             }
+            'adc-pin' {
+                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 17;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Battery divider requires ADC1 GPIO34'
+            }
+            'adc-output' {
+                $text = (Get-Content $pinsPath -Raw).Replace('AMP_ENABLE = 2;', 'AMP_ENABLE = 34;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Input-only GPIO34'
+            }
             'pinout' {
                 $path = Join-Path $fixture 'PINOUT.md'
-                $text = (Get-Content $path -Raw).Replace('| IP5310_KEY | 17 |', '| IP5310_KEY | 12 |')
+                $text = (Get-Content $path -Raw).Replace('| BATTERY_ADC | 34 |', '| BATTERY_ADC | 12 |')
                 [IO.File]::WriteAllText($path, $text)
                 $expected = 'PINOUT mismatch'
             }
             'pinout-owner' {
                 $path = Join-Path $fixture 'PINOUT.md'
-                $text = (Get-Content $path -Raw).Replace('| IP5310_KEY | 17 | Q_KEY |', '| IP5310_KEY | 17 | U_AMP |')
+                $text = (Get-Content $path -Raw).Replace('| BATTERY_ADC | 34 | R_BAT_TOP |', '| BATTERY_ADC | 34 | U_AMP |')
                 [IO.File]::WriteAllText($path, $text)
                 $expected = 'PINOUT mismatch'
             }

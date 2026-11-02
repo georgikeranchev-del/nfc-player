@@ -3,7 +3,8 @@
 This is the single GPIO connection table for the current battery-only build.
 GPIO numbers are ESP32 signal names, NOT physical header positions; clone-board
 layouts vary. Classic ESP32/WROOM without PSRAM remains the working assumption,
-not a verified module identity. GPIO16/17 must be available, not used by PSRAM.
+not a verified module identity. GPIO16 must be available, not used by PSRAM.
+GPIO17 is now unused; remove the previous IP5310 KEY-driver connection.
 
 The symbol, GPIO and component columns are checked against
 [firmware/nfc_player/pins.h](firmware/nfc_player/pins.h) and
@@ -15,13 +16,12 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | Symbol | GPIO | Component | Wire color | Connection and conditions |
 |---|---|---|---|---|
 | AMP_ENABLE | 2 | U_BUFFER | Green | SN74AHCT125N 2A, pin 5, with 10k to GND; 2Y, pin 6, goes to amplifier SD/SD_MODE. Never connect GPIO2 directly to amplifier SD. Boot-strap review required. |
-| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes a powered sleeping ESP32, not a shut-down IP5310. |
+| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes normal powered sleep, not low-battery lockout or a switched-off supply. |
 | PN532_SS | 5 | U_NFC | White | PN532 SS/SSEL; set the module to SPI. Verify reset-state module pulls on this boot-strap pin. |
 | SD_CS | 13 | U_SD | White | SD module CS. |
 | SD_SCK | 14 | U_SD | Blue | SD module SCK/CLK. |
 | SD_MOSI | 15 | U_SD | Yellow | SD module MOSI/DI. Verify reset-state pulls on this boot-strap pin. |
 | SD_MISO | 16 | U_SD | Brown | SD module MISO/DO; GPIO16 must not be occupied by PSRAM. |
-| IP5310_KEY | 17 | Q_KEY | Green | 1k to 2N3904 base; 10k base-to-emitter; emitter to system GND; collector to IP5310 KEY. Never connect KEY directly to a GPIO. |
 | PN532_SCK | 18 | U_NFC | Blue | PN532 SCK. |
 | PN532_MISO | 19 | U_NFC | Brown | PN532 MISO. |
 | LED_DATA | 21 | U_BUFFER | White | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
@@ -32,6 +32,7 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | MOTOR_GATE | 27 | U_GATE | Green | TC4420CPA INPUT pin 2 with 10k to GND; joined OUTPUT pins 6/7 through one 100 ohm resistor to IRLZ44N gate. Keep 10k directly between gate and source. GPIO27 does not drive the MOSFET gate directly. |
 | ENCODER_CLK | 32 | ENC1 | Green | Encoder A/CLK; common to GND. |
 | ENCODER_DT | 33 | ENC1 | Green | Encoder B/DT; common to GND. |
+| BATTERY_ADC | 34 | R_BAT_TOP | Green | ADC1_CH6; 100k from SW_BAT+ to ADC node; 47k and 100nF from node to LOAD_GND. Input only; no internal pull resistors. About 1.343V at a 4.20V pack. |
 <!-- PINOUT:END -->
 
 ## Signal wire color key
@@ -52,16 +53,21 @@ forbidden in this design. The retained straps 2, 5 and 15 are reviewed in
 ## Small connection schematic
 
 Open the full-page [SCHEMATIC.svg](SCHEMATIC.svg) for the complete module-level
-view, including power protection, the original driver/buffer, capacitors, KEY
+view, including power protection, TPS61088, the original driver/buffer, battery ADC
 and the confirmed 4 ohm / 3 W mono speaker. Named supply nets join across panels.
 It is a drawing aid, not proof of clone-board internals or an ERC-checked netlist.
 
 ![Battery-only whole-system wiring reference](SCHEMATIC.svg)
 
 ```text
-1S cell + fuse + protection --> IP5310/K648
-  IP5310 OUT+ -- SW_LOAD --> LOAD_5V
-  IP5310 OUT- -----------> LOAD_GND (protected system return)
+2 x VTC5A in parallel (1S2P) + fuse + 1S PCM
+  PCM P+ --+------------------> IP5310 BAT+ (charger only; OUT unused)
+           +-- SW_LOAD --> SW_BAT+ --> TPS61088 IN+
+  PCM P- ---------------------> IP5310 BAT-, TPS61088 IN-/OUT-, LOAD_GND
+  TPS61088 OUT+ (5.00 V) ------> LOAD_5V
+  SW_BAT+ -- 100k --+----------> GPIO34 / ADC1_CH6
+                   +-- 47k ---> LOAD_GND
+                   +-- 100nF -> LOAD_GND
 
 LOAD_5V --+--> ESP32 VIN/5V
           +--> amplifier VIN, ring 5V, AHCT125 VCC, TC4420 VDD
@@ -72,11 +78,9 @@ flyback diode: anode --> motor -; band/cathode --> motor +
 GPIO27 --> TC4420 pin 2; joined pins 6/7 --> 100 ohm --> IRLZ44N gate
 GPIO21 --> AHCT125 channel 1 --> 330 ohm --> ring DIN
 GPIO2  --> AHCT125 channel 2 -------------> amplifier SD
-GPIO17 --> 1k --> KEY transistor base; collector --> IP5310 KEY
 GPIO4  --> encoder push switch --> LOAD_GND
-IP5310 KEY --> separate NO contact/service connector --> LOAD_GND
 
-LOAD_GND --> module grounds, buffer/driver grounds, KEY emitter
+LOAD_GND --> module grounds, buffer/driver grounds, divider return
 ESP32 3V3 --> encoder breakout VCC, only if it needs power
 ```
 
@@ -96,8 +100,10 @@ ESP32 3V3 --> encoder breakout VCC, only if it needs power
 - Amplifier SD must not be hard-strapped to VIN. GAIN is separate; both speaker
   wires go to amplifier outputs, neither to ground. See the breakout checks in
   [WIRING.md](WIRING.md#dip-ahct125-led-and-amplifier).
-- The KEY transistor cannot cold-start an unpowered ESP32. Retain an already
-  verified 2N7000 implementation instead if fitted; do not build both alternatives.
+- The load switch must remove power from BOTH the boost input and divider top.
+  Do not leave a battery-powered divider driving an unpowered ESP32. Keep the
+  ADC return on protected P-/LOAD_GND, never raw B-. See the
+  [divider and calibration](WIRING.md#battery-voltage-divider) instructions.
 
 DIP numbering is top view, notch at the top and pin 1 upper-left; the solder-side
 view is mirrored. Use short socket-pad links or a common local rail for each

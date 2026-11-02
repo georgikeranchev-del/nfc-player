@@ -18,9 +18,17 @@ constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint32_t BUTTON_HOLD_MS = 1500;
 constexpr uint32_t ENCODER_DEBOUNCE_MS = 2;
 
-constexpr bool KEY_KEEPALIVE_ENABLED = true;
-constexpr uint32_t KEY_INTERVAL_MS = 20000;
-constexpr uint32_t KEY_PULSE_MS = 120;
+constexpr uint32_t BATTERY_DIVIDER_TOP_OHMS = 100000;
+constexpr uint32_t BATTERY_DIVIDER_BOTTOM_OHMS = 47000;
+constexpr uint32_t BATTERY_CALIBRATION_PERMILLE = 1000;
+constexpr uint8_t BATTERY_ADC_SAMPLES = 16;
+constexpr uint32_t BATTERY_SAMPLE_MS = 250;
+constexpr uint32_t BATTERY_LOG_MS = 5000;
+constexpr uint32_t BATTERY_START_MIN_MV = 3500;
+constexpr uint32_t BATTERY_LOW_MV = 3300;
+constexpr uint32_t BATTERY_CRITICAL_MV = 3000;
+constexpr uint32_t BATTERY_MAX_VALID_MV = 4350;
+constexpr uint32_t BATTERY_LOW_HOLD_MS = 2000;
 
 constexpr uint8_t MOTOR_PWM_CHANNEL = 0;
 constexpr uint32_t MOTOR_PWM_HZ = 20000;
@@ -32,8 +40,6 @@ constexpr uint32_t MOTOR_UPDATE_MS = 15;
 
 constexpr size_t AUDIO_BUFFER_BYTES = 8192;
 constexpr uint32_t AUDIO_FADE_MS = 1000;
-// VOLUME_SCALE is the full-scale gain reference; MAX_VOLUME caps the knob below
-// it to limit amplifier power so the XL6009 boost stays within current/thermal limits.
 constexpr uint8_t VOLUME_SCALE = 21;
 constexpr uint8_t INITIAL_VOLUME = 10;
 constexpr uint8_t MIN_VOLUME = 0;
@@ -59,7 +65,15 @@ static_assert(MOTOR_PWM_BITS == 8 && MOTOR_START_DUTY <= MOTOR_RUN_DUTY,
               "Use 8-bit PWM and START <= RUN <= 255");
 static_assert(MOTOR_RAMP_MS > 0 && AUDIO_FADE_MS > 0 && LED_START_MS > 0 && LED_STOP_MS > 0,
               "Fade/ramp durations must be positive");
-static_assert(KEY_PULSE_MS > 0 && KEY_PULSE_MS < KEY_INTERVAL_MS, "Invalid KEY timing");
+static_assert(BATTERY_DIVIDER_TOP_OHMS > 0 && BATTERY_DIVIDER_BOTTOM_OHMS > 0 &&
+              BATTERY_CALIBRATION_PERMILLE >= 800 && BATTERY_CALIBRATION_PERMILLE <= 1200,
+              "Check battery divider and calibration");
+static_assert(BATTERY_CRITICAL_MV > 0 && BATTERY_CRITICAL_MV < BATTERY_LOW_MV &&
+              BATTERY_LOW_MV < BATTERY_START_MIN_MV && BATTERY_START_MIN_MV < BATTERY_MAX_VALID_MV,
+              "Invalid battery voltage thresholds");
+static_assert(BATTERY_ADC_SAMPLES > 0 && BATTERY_SAMPLE_MS > 0 &&
+              BATTERY_LOW_HOLD_MS >= BATTERY_SAMPLE_MS && BATTERY_LOG_MS >= BATTERY_SAMPLE_MS,
+              "Invalid battery sampling/timing");
 static_assert(MIN_VOLUME <= INITIAL_VOLUME && INITIAL_VOLUME <= MAX_VOLUME && MAX_VOLUME > 0,
               "Invalid volume settings");
 static_assert(MAX_VOLUME <= VOLUME_SCALE && VOLUME_SCALE > 0,

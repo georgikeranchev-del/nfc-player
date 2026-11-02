@@ -12,12 +12,14 @@ $gpioOwners = @{}
 foreach ($symbol in $pins.Keys) {
     $gpio = $pins[$symbol]
     if ($gpio -eq 12) { throw 'GPIO12 is prohibited.' }
-    if ($gpio -notin @(0, 2, 4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33)) {
+    if ($gpio -notin @(0, 2, 4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33, 34)) {
         throw "Unsupported or reserved GPIO $gpio"
     }
+    if ($gpio -eq 34 -and $symbol -ne 'BATTERY_ADC') { throw 'Input-only GPIO34 is reserved for BATTERY_ADC.' }
     if ($gpioOwners.ContainsKey($gpio)) { throw "Duplicate GPIO $gpio used by $symbol and $($gpioOwners[$gpio])" }
     $gpioOwners[$gpio] = $symbol
 }
+if ($pins['BATTERY_ADC'] -ne 34) { throw 'Battery divider requires ADC1 GPIO34.' }
 $hardware = Get-Content -LiteralPath (Join-Path $Root 'hardware.json') -Raw | ConvertFrom-Json
 if ($hardware.schema_version -ne 1) { throw 'Unsupported hardware schema.' }
 $components = @{}

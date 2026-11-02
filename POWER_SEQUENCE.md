@@ -1,18 +1,20 @@
 # Power Sequence
 
-## Two different wake paths
+## Start and wake paths
 
-**IP5310 output really off:** a physical KEY/GND tap wakes the boost. If its output
-is stable and the load switch is closed, ESP32 VIN rises and the DevKit cold-boots.
-ESP32 software cannot create this first tap while unpowered. Capacitor/boost
+**Load switch open:** close SW_LOAD to power TPS61088 and the battery divider
+from protected P+. A stable 5 V rail cold-boots the ESP32. The IP5310 is charger
+only; its OUT pins and KEY are not in the player power/wake path. Capacitor/boost
 startup and the ESP32 ROM occur BEFORE the timing below.
 
 **5 V and 3.3 V still valid, ESP32 in deep sleep:** press encoder SW on GPIO4 to
 GND. EXT0 wakes/reset-starts the ESP32; `setup()` and all boot stages run again.
-Pressing KEY alone does not inherently wake a still-powered sleeping ESP32.
+This wake is allowed only after normal user/idle sleep.
 
-**Battery/load switch open:** close it first. KEY cannot bypass an open switch.
-If the boost has auto-shut, a KEY tap may also be necessary.
+**Low-battery sleep:** button and timer wake are disabled. Open SW_LOAD, recharge,
+then switch on again. Charging alone does not wake the ESP32. Boot requires a
+calibrated reading of at least 3.50 V; a reading above 4.35 V is rejected too.
+PCM recovery, if it tripped, follows the PCM maker's procedure, not GPIO/KEY taps.
 
 ## Boot stages
 
@@ -21,7 +23,7 @@ Each peripheral stage runs once; actual library calls can exceed these offsets.
 
 | Earliest time | Stage | Loads |
 |---|---|---|
-| 0 ms | Safe motor/amp/KEY outputs, reset log, encoder init, LED black, PWM attached at zero | Motor off, amp shutdown, LEDs black |
+| 0 ms onward | Safe motor/amp outputs, reset log, ADC setup and 20 ms settling, initial voltage sample, encoder init, LED black, PWM zero | Unsafe voltage enters low-battery sleep before SD/NFC/audio initialization |
 | 200 ms | Initialize SD on HSPI, check/create track directory | Motor/amp still off |
 | 400 ms | Initialize PN532, configure finite retries, start reader task | Motor/amp still off |
 | 600 ms | Allocate/configure audio output silently; ready/standby LEDs | No I2S playback until tag |
@@ -31,10 +33,10 @@ These are not switched supply rails: PN532/SD/amp/LED electronics already have
 power as soon as LOAD_5V appears. LEDs are cleared early to avoid keeping a prior
 latched bright pattern through an ESP32-only reset.
 
-There is NO automatic startup KEY tap: the user already generated the cold-start
-tap, and an immediate extra pulse could be interpreted as a double press. While
-awake, the first configured keep-alive request is after 20 s, then every 20 s,
-with a nominal 120 ms LOW on KEY via the transistor. Verify those values on K648.
+There are no startup or keep-alive KEY taps. GPIO17 is unused. ADC1 GPIO34 is
+sampled every 250 ms (16 readings averaged); calibrated pack voltage is logged
+at boot and every 5 s while awake. Wiring and calibration must be completed
+before relying on the thresholds; a missing/zero reading prevents startup.
 
 ## Tag-to-play sequence
 
@@ -56,16 +58,25 @@ and re-presenting the tag is required to start again. Replays also ramp/fade.
 
 ## Sleep sequence
 
-Hold encoder for 1.5 s AFTER debounce (40 ms). The controller disables KEY pulses,
+Hold encoder for 1.5 s AFTER debounce (40 ms). The controller
 stops motor/audio, clears LEDs and asks the NFC task to stop polling. It waits
 non-blockingly for debounced release, then arms GPIO4 LOW wake and deep-sleeps.
 A button held during boot/wake is ignored until released so it cannot immediately
 put the player back to sleep. Five minutes of idle causes the same shutdown.
 
-NFC polling stop is not PN532 power-down; SD, PN532, ring idle logic, buffers,
-regulator and gate driver still draw current. Measure whether the IP5310 actually
-switches off. If it stays on, encoder wake works but battery consumption remains.
-If it turns off, encoder GPIO4 alone cannot wake it; use the KEY cold-start path.
+While awake, including an initialization fault or waiting for button release,
+voltage at/below 3.30 V continuously for 2 s triggers low-battery sleep. At/below
+3.00 V or above 4.35 V triggers it on the next sample. Recovery above 3.30 V
+before the 2 s timeout cancels that pending low-voltage event. Once sleeping,
+voltage rebound cannot restart playback. Low-battery shutdown does not wait for
+the encoder to be released and does not enable its wake source.
+
+NFC polling stop is not PN532 power-down; TPS61088, SD, PN532, ring idle logic,
+buffers, regulator and gate driver can still draw current. ADC monitoring stops
+in deep sleep. **Sleep is not a battery disconnect.** Measure sleep current,
+open SW_LOAD for storage/recharge, and retain suitable PCM protection. A hardware
+low-voltage disconnect would be needed for autonomous isolation. Cooperative
+sampling can be delayed by library calls and does not replace that protection.
 
 ## Manual tests
 

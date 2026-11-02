@@ -55,7 +55,7 @@ Do not copy the old monolithic sketch into this directory; it defines another
 `setup()`/`loop()`. Select DOIT ESP32 DEVKIT V1 (classic WROOM, not S3/C3/WROVER).
 
 - [config.h](firmware/nfc_player/config.h): all user tuning, volumes, timing,
-  loop count, LED count/pattern mask and motor run duty.
+   battery divider/calibration/cutoffs, loop count, LED count/pattern mask and motor run duty.
 - [pins.h](firmware/nfc_player/pins.h): the one GPIO map, with compile-time checks.
 - [player.cpp](firmware/nfc_player/player.cpp): orchestration and sequencing.
 - `power`, `motor`, `leds`, `audio`, `nfc`, `storage`, `encoder`: hardware adapters.
@@ -71,6 +71,15 @@ three plays, 600 ms motor ramp, 1 s audio fade, 5-minute idle sleep, 1.5 s encod
 hold then release to sleep. A held wake button must first be released to arm a
 new long press. Brownout protection is NOT disabled.
 
+Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5310 is
+charger-only with its OUT unused. **Wire and calibrate the GPIO34 battery divider
+before running this firmware.** See [WIRING.md](WIRING.md#battery-voltage-divider).
+Boot requires at least 3.50 V; <=3.30 V for 2 s or <=3.00 V on a sample stops the
+loads and sleeps without button wake. Switch off, recharge and power-cycle.
+Sleep does not isolate the battery, and the converter/peripherals still draw
+current. The PCM remains required. Startup volume is 10, selectable maximum 15,
+with the original full-scale gain reference of 21 retained.
+
 The supplied tag UIDs and assigned songs are listed in the rendered
 [NFC tag table](NFC_TAGS.md). Use each UID exactly as shown for the MP3 filename.
 
@@ -78,16 +87,17 @@ The supplied tag UIDs and assigned songs are listed in the rendered
 
 After successful initialization with no tag, motor PWM stays at zero and the
 amplifier stays in shutdown. The LED ring shows its dim standby animation, NFC
-polling continues, and KEY keep-alive requests continue every 20 s while awake.
+polling continues, and battery voltage is sampled every 250 ms while awake.
 This is lower-load operation, not zero current or disconnected peripheral power.
-After five minutes without activity, the firmware sleeps and stops keep-alive;
-whether IP5310 subsequently shuts down depends on actual standby current.
+After five minutes without activity, the firmware enters normal button-wake sleep.
+There are no IP5310 KEY pulses; GPIO17 is unused.
 
 The firmware has no separate USB mode that disables idle sleep. **No tag does
 not make simultaneous boost VIN and DevKit USB safe.** For programming, disconnect
 the complete player harness, including GPIOs, and use DevKit USB alone. With SD
-and PN532 disconnected the player may report an initialization fault; that is
-not normal ready/idle operation, but it does not prevent programming.
+and the ADC disconnected the player may report an initialization fault or enter
+low-battery sleep; that is not normal ready/idle operation, but it does not
+prevent programming through the board's normal bootloader procedure.
 
 K648 charging USB is a different power path from DevKit programming USB. Charging
 while playing, isolated programming while charging, and fully wired dual-USB use
@@ -97,7 +107,7 @@ have separate tests and prerequisites in
 ## Pinout
 
 The checked table and compact schematic live in [PINOUT.md](PINOUT.md), including
-the buffered LED/amplifier routes, motor driver, KEY transistor and boot-pin
+the buffered LED/amplifier routes, motor driver, battery divider and boot-pin
 conditions. It is checked against [firmware/nfc_player/pins.h](firmware/nfc_player/pins.h)
 and [hardware.json](hardware.json); edit all three when changing GPIO assignments.
 
@@ -135,11 +145,12 @@ tests, native control tests and a separate real Arduino compilation. Push the
 CONTENTS of this directory as repository root; a workflow in an arbitrary nested
 subdirectory of another repository is not discovered by GitHub.
 
-Rules fail for GPIO12, duplicate GPIOs, missing strap review, pinout drift,
+Rules fail for GPIO12, duplicate GPIOs, misuse of GPIO34, missing strap review, pinout drift,
 missing/extra BOM entries, missing baseline motor gate/source pulldown, or a
 brownout-disable override. They validate declared design data, not actual wiring,
 PCB netlists, transistor pin order, current ratings or safe battery construction.
 
-Local verification: the controller passes native tests. A real ESP32 build has
-not completed here: the platform is not installed and Arduino DNS/downloads fail.
-Hardware adapters and power timing still need an actual board test.
+Local verification: the controller passes native tests. Real ESP32 compilation
+was not run for the battery-monitor change; previous attempts were blocked by
+missing platform/downloads. Hardware adapters, ADC calibration and power timing
+still need an actual board test.

@@ -10,8 +10,13 @@ void Player::begin(uint32_t now) {
   buttonArmed_ = !buttonRaw_;
   Leds.begin();
   Leds.mode(LedMode::Off, now);
-  if (!powerReady) { fail("Power timer initialization failed", now); return; }
+  if (!powerReady) { fail("Power monitoring initialization failed", now); return; }
   if (!Motor.begin()) { fail("Motor PWM initialization failed", now); return; }
+  if (Power.batteryMillivolts() < Config::BATTERY_START_MIN_MV ||
+      Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV) {
+    sleepForBattery(now);
+    return;
+  }
   state_ = PlayerState::BootSD;
 }
 
@@ -23,22 +28,34 @@ void Player::stopTrack(uint32_t now, LedMode mode) {
 
 void Player::fail(const char *message, uint32_t now) {
   error_ = message;
-  Power.disableKeepAlive();
   stopTrack(now, LedMode::Off);
   Nfc.stop();
   state_ = PlayerState::Fault;
 }
 
 void Player::requestSleep(uint32_t now) {
-  Power.disableKeepAlive();
   stopTrack(now, LedMode::Off);
   Nfc.stop();
   state_ = PlayerState::WaitRelease;
 }
 
-void Player::sleep() {
+void Player::sleep(bool allowButtonWake) {
   state_ = PlayerState::Sleeping;
-  Power.sleep();
+  Power.sleep(allowButtonWake);
+}
+
+bool Player::batteryLow(uint32_t now) {
+  uint32_t voltage = Power.batteryMillivolts();
+  if (voltage <= Config::BATTERY_CRITICAL_MV || voltage > Config::BATTERY_MAX_VALID_MV) return true;
+  if (voltage > Config::BATTERY_LOW_MV) { lowBatteryPending_ = false; return false; }
+  if (!lowBatteryPending_) { lowBatteryPending_ = true; lowBatteryAt_ = now; }
+  return now - lowBatteryAt_ >= Config::BATTERY_LOW_HOLD_MS;
+}
+
+void Player::sleepForBattery(uint32_t now) {
+  error_ = "Battery voltage unsafe; check divider or recharge and power-cycle";
+  requestSleep(now);
+  sleep(false);
 }
 
 void Player::button(uint32_t now) {
@@ -73,10 +90,12 @@ void Player::startTrack(uint32_t now) {
 }
 
 void Player::tick(uint32_t now) {
-  if (state_ == PlayerState::Fault || state_ == PlayerState::Sleeping) return;
+  if (state_ == PlayerState::Sleeping) return;
+  Power.tick(now);
+  if (batteryLow(now)) { sleepForBattery(now); return; }
+  if (state_ == PlayerState::Fault) return;
   button(now);
   if (state_ == PlayerState::WaitRelease || state_ == PlayerState::Sleeping) return;
-  Power.tick(now);
   int8_t delta = Encoder.delta(now);
   if (delta != 0) {
     int target = static_cast<int>(volume_) + delta;

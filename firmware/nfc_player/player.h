@@ -17,7 +17,9 @@ public:
 private:
   void button(uint32_t now);
   void requestSleep(uint32_t now);
-  void sleep();
+  void sleep(bool allowButtonWake = true);
+  bool batteryLow(uint32_t now);
+  void sleepForBattery(uint32_t now);
   void stopTrack(uint32_t now, LedMode mode);
   void startTrack(uint32_t now);
   void fail(const char *message, uint32_t now);
@@ -31,7 +33,9 @@ private:
   PlayerState state_ = PlayerState::BootSD;
   const char *error_ = "";
   uint32_t bootAt_ = 0, lastActivity_ = 0, buttonChanged_ = 0, pressedAt_ = 0;
+  uint32_t lowBatteryAt_ = 0;
   bool buttonRaw_ = false, buttonStable_ = false, buttonArmed_ = true;
+  bool lowBatteryPending_ = false;
   uint8_t volume_ = Config::INITIAL_VOLUME, plays_ = 0;
   char uid_[Config::UID_CAPACITY] = {};
   char path_[Config::TRACK_PATH_CAPACITY] = {};

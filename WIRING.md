@@ -3,12 +3,15 @@
 This is the new baseline, superseding contradictory advice in the old chat and
 parent wiring file. Keep the existing classic ESP32 development board, IP5310/K648,
 PN532, SD module, MAX98357A, ring, N20 motor and encoder. Reuse their existing
-capacitors if identified and undamaged. No TP4056/alternative boost is required.
+capacitors if identified and undamaged. The selected load supply is now a
+**TPS61088 JXL V1.10 module set to 5.00 V**, replacing the XL6009. IP5310 is used
+only for charging; its OUT pins do not feed the player. The battery is two matched
+VTC5A cells in parallel (1S2P), with suitable 1S protection and a coordinated fuse.
 
 Reported silicon is **ESP32-D0WD-V3, revision v3.1, with a 40 MHz crystal**.
 This does not confirm the development-board/module model or PSRAM. WROOM without
 PSRAM is the working assumption from the reported earlier check, not a verified
-module identity. Use [PINOUT.md](PINOUT.md) for the complete GPIO table, GPIO16/17
+module identity. Use [PINOUT.md](PINOUT.md) for the complete GPIO table, GPIO16
 restrictions and compact connection schematic. Full reported chip details are in
 [README.md](README.md#detected-esp32).
 
@@ -35,18 +38,19 @@ bypassing battery protection or joining raw B- to system GND.
   one 1 uF ceramic at the gate driver. Yellow box film caps can remain for motor
   brush suppression once their value/rating is confirmed.
 - **Resistors:** keep motor 100 ohm and gate/source 10k, LED data 330 ohm. Add
-  10k pulldowns at gate-driver input, amp-buffer input, LED-buffer input; KEY
-  NPN needs 1k base series and 10k base/emitter. Buy extras as normal stock.
-- **2N3904, TO-92** if no working KEY pull-down circuit exists. Verify its pinout.
+  10k pulldowns at gate-driver input, amp-buffer input and LED-buffer input.
+- **Battery divider:** one 100k and one 47k, both 1% metal-film, 0.25 W;
+  one additional 100 nF X7R ceramic, >=16 V, at GPIO34. No KEY transistor is needed.
+- **TPS61088 JXL V1.10 boost module:** verify the actual board's input range,
+  output adjustment, current/thermal limits and undervoltage behavior before use.
 - **Cell protection and fuse hardware:** documented protected 1S cell or compatible
   1S PCM, DC-rated fuse holder, rated battery holder/leads/connectors and heatshrink.
   Final fuse/PCM current is a measurement decision, not a generic 3 A shopping rule.
 - **Perfboard, sockets/header strips, rated connectors, insulated wire, standoffs**
   and a DC-rated SPST load switch if you want physical off. Use mounting support
   for the encoder; do not support the box/knob by solder joints alone.
-- **Optional fallback:** one normally-open momentary KEY button. Leave a service
-  connector first so the one-external-button decision can wait. No new encoder
-  is needed unless the existing one is mechanically unreliable.
+- Keep the existing encoder. Its push switch wakes normal powered sleep;
+  cold-start uses the load switch, not IP5310 KEY.
 
 Exact inventory and quantities are in [BOM.csv](BOM.csv). A gate driver and logic
 buffer do not solve boost overload, poor wiring, inappropriate battery selection,
@@ -102,16 +106,18 @@ that isolation; disconnecting only VIN while leaving GPIOs connected is not enou
 ## Battery, protection and main switch
 
 ```text
-Cell + -- F1 (close to cell) -- PCM B+
-Cell - ---------------------- PCM B-
-PCM P+ ---------------------- IP5310 BAT+
-PCM P- ---------------------- IP5310 battery return / system GND
+1S2P VTC5A pack + -- F1 (near pack +) -- PCM B+
+1S2P VTC5A pack - -------------------- PCM B-
+PCM P+ --+---------------------------- IP5310 BAT+ (charger only)
+         +-- SW_LOAD -- SW_BAT+ --+---- TPS61088 IN+
+                                +---- battery divider top (100k)
+PCM P- ------------------------------ IP5310 BAT-, TPS61088 IN-/OUT-, LOAD_GND
 
-IP5310 OUT+ -- SW_LOAD ------- LOAD_5V star
-IP5310 OUT- ----------------- LOAD_GND star
+TPS61088 OUT+ (set to 5.00 V) --------- LOAD_5V star
+IP5310 OUT+ and OUT-: no external load connection
 
 LOAD_5V -> ESP32 VIN/5V, amp VIN, ring 5V, motor +, AHCT125 VCC, TC4420 VDD
-LOAD_GND -> all module returns, MOSFET source, driver/buffer GND, KEY emitter
+LOAD_GND -> all module returns, MOSFET source, driver/buffer GND, divider return
 ```
 
 Use the PCM manufacturer's real terminals, not inferred positions. A protected
@@ -121,15 +127,74 @@ Size switch, wiring, connector and fuse for BATTERY current as well as load peak
 Fuse coordination must allow expected transients but protect the weakest wire
 and cell limits. Do not intentionally short a lithium cell to test protection.
 
-The load switch leaves charging possible later (but no charger is connected for
-this milestone). For storage, a battery disconnect can be added instead/before
-the charger; with it open, that cell cannot charge. Either switch can be bypassed
-by an unintended USB power path, so keep USB disconnected in battery tests.
+**Move SW_LOAD from the old 5 V output position to the protected battery branch
+feeding BOTH TPS61088 IN+ and the divider.** The IP5310 BAT connection stays
+upstream of this switch, so charging remains possible with the player off.
+Rate the switch for battery-side current, which can exceed the 5 V load current.
+An output-only switch would leave the divider driving an unpowered ESP32.
+Disconnect the ADC lead too whenever removing just the ESP32's power.
 
-For battery-only development omit the former series rail diode. Route IP5310
-output straight through the load switch to the star. Do not put motor/amp current
+IP5310 BAT+/BAT- means its cell terminals (sometimes marked IN+/IN-), not its
+USB 5 V input. Confirm the TPS61088 module has a common IN-/OUT- return with all
+power removed. Keep both USB cables unplugged for battery-only tests. No source
+mux, CC1/CC2 detection or converter EN control is implemented.
+
+For battery-only development omit the former series rail diode. Route TPS61088
+output straight to the star. Do not put motor/amp current
 through the ESP32 headers, skinny daisy-chain jumpers or long perfboard solder
 tracks. Use short power wires and pair each signal with a nearby return path.
+
+### Battery voltage divider
+
+```text
+SW_BAT+ (protected P+ after SW_LOAD, also TPS61088 IN+)
+  |
+  100k ohm, 1%, 0.25 W    R_BAT_TOP
+  |
+  +---------------------- GPIO34 / ADC1_CH6 (input only)
+  |              |
+  47k ohm        100 nF X7R
+  1%, 0.25 W     >=16 V
+  |              |
+  +--------------+------- LOAD_GND (protected return, NEVER raw B-)
+```
+
+Fit the 47k and capacitor close to the ESP32. Keep this sense wire away from
+motor/speaker/switching nodes and give it a quiet return to the ground star.
+GPIO34 has no internal pull resistors; the external 47k is required. Never
+connect pack voltage or regulated 5 V directly to it. Verify the divider with
+a meter before attaching the ADC lead to the ESP32.
+
+The nominal conversion is `V_ADC = V_input * 47 / 147`: 4.20 V gives about
+1.343 V; 3.60 V gives 1.151 V; 3.30 V gives 1.055 V. Divider current is about
+29 microamps at 4.20 V. The 100 nF capacitor filters sampling/switching noise.
+Firmware uses 12-bit `analogReadMilliVolts`, 6 dB attenuation, 16 readings per
+sample and a 250 ms sample interval. The measured value includes protection,
+switch and wiring drop; it is the boost-input voltage, not a separate raw-cell
+measurement. The ratio is not doubled for two parallel cells.
+
+Calibrate `BATTERY_CALIBRATION_PERMILLE` in
+[config.h](firmware/nfc_player/config.h) against a meter across SW_BAT+/LOAD_GND,
+not against the nominal cell rating or a percentage estimate. The serial log
+reports ADC millivolts and corrected pack millivolts at boot and every 5 s while
+awake. Follow the [calibration procedure](MANUAL_TESTS.md#battery-voltage-calibration-and-cutoff)
+for the correction formula, safe receive-only logging and cutoff tests.
+
+Conservative initial settings are 3.50 V minimum at boot, shutdown after at or
+below 3.30 V for 2 s, and immediate shutdown at or below 3.00 V on a sampled
+reading. A reading above 4.35 V also stops operation as a wiring/calibration
+fault. These are operating choices to verify under load, not VTC5A absolute
+limits or state-of-charge percentages. Sampling is cooperative, not a hard
+real-time protection circuit.
+
+Low-battery shutdown stops motor/audio/NFC polling, clears LEDs and deep-sleeps
+without button or timer wake. Open SW_LOAD, recharge, then switch on again;
+charging alone does not wake it. **Deep sleep does not disconnect the TPS61088,
+SD, PN532 or other rail loads, and the ADC no longer monitors during sleep.**
+Do not store it in this state. Keep the PCM as independent protection. A proper
+hardware low-voltage disconnect is needed for unattended automatic isolation;
+do not assume the JXL board's UVLO or EN provides that without its schematic and
+measurements. A heatsink or quieter audio cannot correct over-discharge.
 
 ### Fuse and PCM during startup
 
@@ -164,16 +229,16 @@ not expected startup behavior. Keep the load off until the cause is understood.
 
 The diagram above applies to a **documented 1S, 4.20 V Li-ion, common-port PCM**:
 the same protected P+/P- port carries discharge and later charge current. It is
-not a pin-position guide for an unidentified board. The PCM protects the cell;
-the IP5310 performs charging/boost conversion. A 2S/3S board is not suitable.
+not a pin-position guide for an unidentified board. The PCM protects the pack;
+IP5310 charges it and TPS61088 supplies the player. A 2S/3S PCM is not suitable.
 
-For a bare cell in its holder, the electrical connections are:
+For the matched parallel pack, the electrical connections are:
 
 ```text
-Holder + --> F1 close to holder + --> PCM B+
-Holder - --------------------------> PCM B-
-PCM P+ ----------------------------> IP5310 BAT+
-PCM P- ----------------------------> IP5310 BAT-/protected system return
+Pack + --> F1 close to pack + --> PCM B+
+Pack - ------------------------> PCM B-
+PCM P+ ------------------------> IP5310 BAT+ and SW_LOAD input
+PCM P- ------------------------> IP5310 BAT- and protected system return
 ```
 
 All player grounds stay on the protected side. Do not connect holder - directly
@@ -200,10 +265,9 @@ are needed before treating the wiring and surge tolerance as verified.
 
 ### 18650 selection
 
-**A single suitable 18650 is a reasonable choice**, subject to the measured load
-and the actual K648 charging configuration. "18650" describes the cell size, not
-its chemistry, current capability or protection. Keep this a 1S design: do not
-connect two cells in series or improvise a parallel pack to cure startup faults.
+The selected cells are **two matched VTC5A cells in parallel**, not in series.
+"18650" describes size, not chemistry, current capability or protection. The
+general checks below still apply to this 1S2P pack and the actual K648 charger.
 
 | Parameter | What to look for |
 |---|---|
@@ -218,7 +282,7 @@ connect two cells in series or improvise a parallel pack to cure startup faults.
 
 A higher-current cell does not force current into the load, but it can deliver
 more current into a fault: protection, a correctly coordinated fuse and insulated
-connections remain necessary. It cannot increase the IP5310 module's own output
+connections remain necessary. It cannot increase the TPS61088 module's own output
 capability. A healthy existing cell that meets the measured requirements need
 not be replaced just to obtain a larger mAh number.
 
@@ -246,12 +310,11 @@ that gives roughly **1.8 hours at 5.1 V / 1 A average load**, or **0.9 hours at
 can reduce this. Measure average power with representative music and lighting;
 do not treat the full labelled capacity as mAh available at 5 V.
 
-### Later runtime option: a 1S2P pack
+### Selected VTC5A 1S2P pack
 
-After the single-cell system is stable, a matched two-cell parallel pack can give
-**approximately twice the runtime** at the same load. Two 3000 mAh cells form a
-nominal 6000 mAh pack at the same 3.6/3.7 V nominal and 4.20 V full-charge voltage,
-not a higher-voltage pack. Actual runtime depends on usable capacity, cutoff,
+The two matched VTC5A cells have the same voltage as one cell: about **3.6 V
+nominal and 4.20 V fully charged**, not 7.2/8.4 V. Capacity adds and current is
+shared, subject to cell/connection matching. Actual runtime depends on usable capacity, cutoff,
 temperature and conversion efficiency. Charging from the same limited current
 will take roughly longer in proportion to capacity.
 
@@ -264,11 +327,11 @@ between parallel cells. Matching voltage alone also does not prove cell health.
 For this build, prefer a professionally assembled **protected 1S2P pack** from a
 reputable supplier, with matched chemistry/model/capacity/age/state of charge,
 appropriate pack/inter-cell fault protection and documented output/charge ratings.
-Use its fused protected output at the existing IP5310 BAT interface:
+Use the protected output for the charger and switched player branch:
 
 ```text
-Documented protected 1S2P pack + --> appropriately rated fuse --> IP5310 BAT+
-Documented protected 1S2P pack - -----------------------------> IP5310 BAT-
+Protected 1S2P pack + --> coordinated fuse --> IP5310 BAT+ and SW_LOAD input
+Protected 1S2P pack - ----------------------> IP5310 BAT- and LOAD_GND
 ```
 
 Fuse placement/rating must follow the pack design; its internal protected cells
@@ -277,11 +340,9 @@ then reconnect them at different charge levels, hot-swap a cell, or use a two-ce
 series holder. **Never feed a 2S pack (up to 8.4 V) into this 1S battery input.**
 
 A parallel pack may reduce battery sag, but a 3 A pack PCM/fuse does not become a
-6 A device: it still carries the combined pack current. The IP5310 output limit
-also stays unchanged. Recheck charging compatibility, protection and mechanical
-space before adoption. It is worth considering if measured one-cell runtime is
-too short; it is not needed just to make an otherwise adequate one-cell design
-more complicated. The current BOM and schematic remain a single-cell baseline.
+6 A device: it still carries the combined pack current. The converter's output
+limit also stays unchanged. Verify charging compatibility, pack construction,
+protection and mechanical clearance; a parallel pack is not a boost-overload fix.
 
 ## Motor: driven gate, low-side switching
 
@@ -442,29 +503,19 @@ the amplifier can approach or exceed that nominal power under some conditions.
 Its wattage label is not a speaker-protection limiter. Neither speaker lead goes
 to GND, including an oscilloscope ground clip.
 
-## KEY and encoder
+## Encoder and removal of KEY control
 
 ```text
-GPIO17 -- 1k -- 2N3904 BASE
-BASE ----- 10k -- EMITTER -> system GND
-COLLECTOR ---------------- IP5310 KEY
-KEY ------ [temporary NO contact / optional wake button] ------ GND
-
 Encoder SW -> GPIO4; other switch terminal -> GND
 Encoder A/CLK -> GPIO32; B/DT -> GPIO33; common -> GND
 Encoder breakout VCC -> 3V3 only, if the module needs it
 ```
 
-The transistor emulates a tap while ESP32 is running. It cannot initiate its own
-cold boot. Never connect KEY directly to GPIO4/17. Retain your already-tested
-2N7000 circuit instead if fitted; do not build both driver alternatives.
-
-The KEY voltage and press-characterization procedure is in
-[MANUAL_TESTS.md](MANUAL_TESTS.md#key-characterization).
-
-Keep the encoder and KEY on separate headers during bring-up. See the one-control
-decision in [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md); no unmeasured isolation
-circuit is described as solder-ready.
+Disconnect the old GPIO17-to-KEY transistor circuit; GPIO17 is now unused.
+Firmware no longer configures that pin, creates a KEY timer or issues taps.
+Do not join KEY to GPIO4. The charger's onboard button may remain, but it does
+not control the TPS61088 path or wake an unpowered player. Normal sleep wakes
+with the encoder; low-battery lockout requires recharge and a power cycle.
 
 ## SD, PN532 and decoupling
 
@@ -475,7 +526,8 @@ modules only according to their own schematic, not from the general 5 V list.
 
 | Location | Existing/additional capacitance |
 |---|---|
-| IP5310 output | Existing 1000 uF + 100 nF; verify startup with this load |
+| TPS61088 output | Existing 1000 uF + 100 nF only after checking JXL startup/inrush and allowed capacitance |
+| Battery ADC node | 100 nF to LOAD_GND, close to GPIO34; not a 5 V supply bypass |
 | ESP32 VIN | Existing board capacitors + local 100 nF; extra 470 uF only as a measured trial |
 | MAX98357A VIN | 100 uF + 100 nF |
 | LED ring | 470 uF + 100 nF |

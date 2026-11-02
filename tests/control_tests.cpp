@@ -4,6 +4,7 @@
 #include "pins.h"
 #include "motor.h"
 #include "player.h"
+#include "power.h"
 
 int checks = 0;
 void require(bool condition, const char *message) {
@@ -11,12 +12,13 @@ void require(bool condition, const char *message) {
   if (!condition) { std::printf("FAIL: %s\n", message); throw 1; }
 }
 struct FakePower : IPower {
-  bool ok = true, disabled = false, slept = false;
+  bool ok = true, slept = false, buttonWake = true;
   uint32_t ticks = 0;
+  uint32_t millivolts = 3800;
   bool begin() override { return ok; }
   void tick(uint32_t) override { ++ticks; }
-  void disableKeepAlive() override { disabled = true; }
-  void sleep() override { slept = true; }
+  uint32_t batteryMillivolts() const override { return millivolts; }
+  void sleep(bool allowButtonWake) override { slept = true; buttonWake = allowButtonWake; }
 };
 struct FakePwm : IPwm {
   bool ok = true;
@@ -94,6 +96,11 @@ struct Rig {
 
 int main() {
   try {
+    require(PowerControl::batteryMillivoltsFromAdc(0) == 0, "zero ADC stays zero");
+    require(PowerControl::batteryMillivoltsFromAdc(1343, 1000) == 4200, "full 1S pack divider conversion");
+    require(PowerControl::batteryMillivoltsFromAdc(1151, 1000) == 3600, "nominal 1S pack divider conversion");
+    require(PowerControl::batteryMillivoltsFromAdc(1000, 1000) == 3128, "divider conversion rounds millivolts");
+    require(PowerControl::batteryMillivoltsFromAdc(1343, 1020) == 4284, "meter calibration scales pack reading");
     {
       Rig rig;
       rig.player.begin(0);
@@ -129,7 +136,7 @@ int main() {
       require(rig.audio.starts == Config::MAX_PLAYS && rig.player.completedPlays() == Config::MAX_PLAYS, "three plays");
       require(rig.player.state() == PlayerState::Idle && rig.pwm.duty == 0, "stop after repeats");
       rig.step(Config::IDLE_SLEEP_MS);
-      require(rig.power.slept && rig.power.disabled && rig.nfc.stopped, "idle sleep stops keepalive and NFC");
+      require(rig.power.slept && rig.power.buttonWake && rig.nfc.stopped, "idle sleep allows button wake and stops NFC");
     }
           {
             Rig rig; rig.boot();
@@ -139,11 +146,11 @@ int main() {
               "no-tag idle keeps motor and audio off until the timeout");
             require(rig.leds.current == LedMode::Standby && !rig.nfc.stopped,
               "no-tag idle retains standby LEDs and NFC polling");
-            require(rig.power.ticks > powerTicks && !rig.power.disabled,
-              "no-tag idle continues servicing keepalive");
+            require(rig.power.ticks > powerTicks && !rig.power.slept,
+              "no-tag idle continues monitoring battery");
             rig.step();
-            require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && rig.power.disabled && rig.nfc.stopped,
-              "no-tag timeout sleeps and stops keepalive and NFC");
+            require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && rig.power.buttonWake && rig.nfc.stopped,
+              "no-tag timeout sleeps with button wake and stops NFC");
             require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off,
               "no-tag sleep leaves motor audio and LEDs off");
           }
@@ -169,21 +176,74 @@ int main() {
     }
     {
       Rig rig; rig.encoder.held = true; rig.boot(); rig.step(Config::BUTTON_HOLD_MS + 1);
-      require(!rig.power.disabled, "wake button held does not shut down again");
+      require(rig.player.state() == PlayerState::Idle, "wake button held does not shut down again");
       rig.encoder.held = false; rig.step(); rig.step(Config::BUTTON_DEBOUNCE_MS);
       rig.tag("A1");
       rig.encoder.held = true; rig.step(); rig.step(Config::BUTTON_DEBOUNCE_MS - 1);
-      require(!rig.power.disabled, "press debounced");
+      require(rig.player.state() == PlayerState::MotorRamp, "press debounced");
       rig.step(); rig.step(Config::BUTTON_HOLD_MS);
       require(rig.player.state() == PlayerState::WaitRelease && rig.pwm.duty == 0 && !rig.audio.active, "long hold stops loads");
-      require(rig.power.disabled && !rig.power.slept, "wait for release without KEY pulses");
+      require(rig.nfc.stopped && !rig.power.slept, "wait for release with NFC stopped");
       rig.tag("B2"); require(rig.pwm.duty == 0, "no new playback during shutdown");
       rig.encoder.held = false; rig.step(); rig.step(Config::BUTTON_DEBOUNCE_MS);
-      require(rig.power.slept, "release enters sleep");
+      require(rig.power.slept && rig.power.buttonWake, "release enters sleep with button wake");
     }
     {
       Rig rig; rig.boot(UINT32_MAX - 300); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
       require(rig.player.state() == PlayerState::Playing, "boot and ramp survive rollover");
+    }
+    {
+      const uint32_t unsafeVoltages[] = {0, Config::BATTERY_CRITICAL_MV, Config::BATTERY_LOW_MV,
+        Config::BATTERY_START_MIN_MV - 1, Config::BATTERY_MAX_VALID_MV + 1};
+      for (uint32_t voltage : unsafeVoltages) {
+        Rig rig; rig.power.millivolts = voltage; rig.encoder.held = true; rig.boot();
+        require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && !rig.power.buttonWake,
+          "unsafe startup voltage sleeps without button wake even if held");
+        require(rig.storage.initialized == 0 && rig.nfc.initialized == 0 && rig.audio.initialized == 0,
+          "unsafe startup voltage blocks peripheral initialization");
+        require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off,
+          "unsafe startup leaves loads off");
+      }
+    }
+    {
+      Rig rig; rig.power.millivolts = Config::BATTERY_START_MIN_MV; rig.boot();
+      require(rig.player.state() == PlayerState::Idle, "startup threshold is inclusive");
+      rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      rig.power.millivolts = Config::BATTERY_LOW_MV; rig.step();
+      rig.step(Config::BATTERY_LOW_HOLD_MS - 1);
+      require(!rig.power.slept && rig.audio.active, "short low-voltage dip does not stop playback");
+      rig.power.millivolts = Config::BATTERY_LOW_MV + 1; rig.step();
+      rig.power.millivolts = Config::BATTERY_LOW_MV; rig.step();
+      rig.step(Config::BATTERY_LOW_HOLD_MS - 1);
+      require(!rig.power.slept, "voltage recovery resets low-voltage timer");
+      rig.step();
+      require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && !rig.power.buttonWake,
+        "sustained low voltage sleeps without button wake");
+      require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off && rig.nfc.stopped,
+        "low voltage stops motor audio LEDs and NFC");
+      rig.power.millivolts = 4200; rig.tag("B2");
+      require(rig.player.state() == PlayerState::Sleeping && rig.audio.starts == 1,
+        "voltage rebound cannot restart playback");
+    }
+    {
+      const uint32_t unsafeVoltages[] = {0, Config::BATTERY_CRITICAL_MV, Config::BATTERY_MAX_VALID_MV + 1};
+      for (uint32_t voltage : unsafeVoltages) {
+        Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+        rig.encoder.held = true; rig.power.millivolts = voltage; rig.step();
+        require(rig.power.slept && !rig.power.buttonWake && rig.pwm.duty == 0 && !rig.audio.active,
+          "critical or invalid voltage stops immediately without waiting for button release");
+      }
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1");
+      rig.power.millivolts = Config::BATTERY_CRITICAL_MV; rig.step();
+      require(rig.power.slept && rig.pwm.duty == 0 && rig.audio.starts == 0,
+        "critical voltage during motor ramp prevents audio startup");
+    }
+    {
+      Rig rig; rig.boot(UINT32_MAX - 1000);
+      rig.power.millivolts = Config::BATTERY_LOW_MV; rig.step(); rig.step(Config::BATTERY_LOW_HOLD_MS);
+      require(rig.power.slept && !rig.power.buttonWake, "low-voltage timer survives rollover");
     }
     for (int failure = 0; failure < 5; ++failure) {
       Rig rig;
@@ -191,8 +251,10 @@ int main() {
       *flags[failure] = false;
       rig.boot(); rig.tag("A1");
       require(rig.player.state() == PlayerState::Fault && rig.pwm.duty == 0 && !rig.audio.active, "initialization fault is fail-closed");
-      require(rig.power.disabled, "initialization fault stops KEY pulses");
-      require(rig.leds.initialized && rig.leds.current == LedMode::Off, "ring cleared even when power timer fails");
+      require(rig.nfc.stopped, "initialization fault stops NFC");
+      require(rig.leds.initialized && rig.leds.current == LedMode::Off, "ring cleared even when power monitoring fails");
+      rig.power.millivolts = Config::BATTERY_CRITICAL_MV; rig.step();
+      require(rig.power.slept && !rig.power.buttonWake, "battery monitoring continues after initialization faults");
     }
     std::printf("PASS: %d HAL/control assertions\n", checks);
     return 0;

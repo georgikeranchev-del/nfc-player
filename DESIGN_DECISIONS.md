@@ -3,7 +3,8 @@
 ## Scope and canonical project
 
 Keep the existing IP5310/K648, 6 V/50 RPM N20 and ESP32 DevKit V1. Battery-only
-operation is the first milestone. USB charging/programming handover and shared
+operation uses a TPS61088 JXL V1.10 set to 5 V, replacing XL6009, and a matched
+VTC5A 1S2P pack. IP5310 is charger-only with OUT unused. USB charging/programming handover and shared
 USB power are deliberately not part of the solder-ready baseline. The archived
 monolith and old KiCad diagrams are not maintained build inputs.
 
@@ -14,44 +15,28 @@ monolith and old KiCad diagrams are not maintained build inputs.
   does not prove acceptable rise time, no dip or no overshoot.
 - No mandatory series 1N5822 in the battery-only 5 V distribution: it wastes
   voltage headroom and does not provide complete two-source isolation.
-- Prefer a load-rail SPST switch after the IP5310 output if retaining future
-  charging while off matters. A battery switch disconnects battery supply to
-  the charger too, and is not an all-source cutoff when USB is connected.
-- No MCU code can create the initial KEY event if that MCU has no power.
-- Deep sleep leaves boards on the 5 V rail. IP5310 auto-off remains dependent
-  on measured standby current; it is not guaranteed by firmware.
+- SW_LOAD switches protected P+ to both TPS61088 IN+ and the ADC divider top.
+  IP5310 BAT stays connected upstream for charging while off. An output-only
+  switch is unsuitable with a permanently connected battery ADC divider because
+  it can back-power the ESP32. This is not an all-source USB cutoff.
+- No KEY pulses or KEY driver are used. No charger/load mux is implemented.
+- Deep sleep leaves boards and the converter connected. Battery monitoring
+  stops in sleep; firmware is not a replacement for a PCM or hardware disconnect.
 - Software stages initialization/actuation, not physical power to every board.
   True per-board rail sequencing requires load switches, not extra delays.
 
 ## One visible control
 
 The current encoder remains connected to GPIO4/GND, active LOW. It handles
-volume, powered-sleep wake and long-press sleep. GPIO17 separately pulls KEY
-down via an NPN and does not sense the encoder.
-
-For the first reliable perfboard version, leave a 2-pin KEY/GND service connector.
-A temporary contact or optional momentary NO panel button provides cold-start.
-Two buttons are the simple fallback, not a requirement to drill two holes now.
-
-One-button choices, in order:
-
-1. If IP5310 keeps a healthy rail throughout sleep, the existing encoder alone
-   wakes the ESP32. This does NOT solve wake after actual IP5310 shutdown.
-2. A genuinely double-pole push switch mechanically operated by the same knob
-   can isolate KEY and GPIO4, but common EC11/PEC11R push switches are SPST. Do
-   not buy a standard encoder expecting two isolated poles. KEY long-hold behavior
-   must still be compatible with the shutdown gesture.
-3. To retain the exact encoder across power loss, measure KEY voltage, low
-   threshold/pull-up behavior, off-state behavior and long/double presses before
-   designing isolation/pulse-shaping. The earlier 47k/10k KEY-sensing circuit is
-   withdrawn. GPIO17 taps must not become false encoder presses, and the IP5310
-   must not back-power GPIO4 when the ESP32 is off. No unverified shared-wire or
-   diode-OR drawing is presented as ready to solder.
+volume, normal powered-sleep wake and long-press sleep. GPIO17 and the former KEY
+driver are unused. Cold-start is by SW_LOAD. Low-battery sleep deliberately has
+no button/timer wake: switch off, recharge, then switch on. A single encoder does
+not provide a physical battery disconnect; keep the DC-rated switch accessible.
 
 For mechanical quality, consider a panel-supported Bourns PEC11R or Alps Alpine
 EC11E variant WITH momentary push. Confirm shaft type/length, mounting, detent/
 pulse counts, pinout and switch poles from the exact part datasheet. It improves
-mechanical durability, not the KEY power-domain problem. Keep your working
+mechanical durability, not the power-disconnect requirement. Keep your working
 encoder unless its contacts/mounting are a real issue; no new encoder is required.
 
 ## Logic and motor drive
@@ -91,9 +76,12 @@ Arduino/FreeRTOS APIs. `MotorControl` also injects a PWM port. The NFC task alon
 owns PN532 reads and communicates via a one-slot latest-state queue. Its stop
 request is atomic; no `volatile`-as-synchronization pattern is used.
 
-KEY release uses an ESP timer, not the main loop. This avoids the old 600 ms
-blocking-ramp pulse stretch but is not a hard real-time pulse-width guarantee.
-The decoder/SD/NFC initialization calls can still block. Failures leave loads
+PowerControl reads calibrated ADC millivolts through a 100k/47k divider on ADC1
+GPIO34; a 100 nF filter and 16-sample average reduce noise. Player handles startup
+voltage checks and sustained/critical low-voltage shutdown. Thresholds and meter
+calibration are in config.h; 3.6 V nominal is not a calibration reference or an
+accurate charge-percentage mapping. The decoder/SD/NFC calls can still block,
+so sampling is not a hard real-time safety mechanism. Failures leave loads
 off and report an error; startup does not continue with missing prerequisites.
 
 Two-second startup is a target to measure, not a promise. Playback requires a

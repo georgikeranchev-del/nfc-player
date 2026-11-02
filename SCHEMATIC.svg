@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1680" viewBox="0 0 1640 1680" role="img" aria-labelledby="title desc">
-  <title id="title">NFC player battery-only connection drawing</title>
-  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. An XL6009 boost converter drives the 5 V load from the PCM output in parallel with the IP5310 input; the IP5310 output is left unused and the pack is parallel VTC5A cells. Signal wire colors match by role across components. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1840" viewBox="0 0 1640 1840" role="img" aria-labelledby="title desc">
+  <title id="title">NFC player power and connection drawing</title>
+  <desc id="desc">Functional wiring reference for the TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor and four-ohm three-watt speaker. A protected VTC5A 1S2P pack feeds a TPS61088 JXL V1.10 set to 5 V. The load switch disconnects both converter input and the GPIO34 battery divider. IP5310 is charger-only on the unswitched protected pack; OUT pins are unused and there is no KEY driver. Named supply nets connect across panels. This is not a verified clone-module schematic or a hardware low-voltage disconnect.</desc>
   <defs>
     <style>
       text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
@@ -28,72 +28,80 @@
       .dot { fill: #000000; }
     </style>
   </defs>
-  <rect width="1640" height="1680" fill="white"/>
-  <text x="40" y="45" class="title">NFC Player: Battery-Only Connection Drawing</text>
+  <rect width="1640" height="1840" fill="white"/>
+  <text x="40" y="45" class="title">NFC Player: Power and Connection Drawing</text>
   <text x="40" y="75">TC4420CPA + SN74AHCT125N | GPIO numbers, not physical DevKit header positions | 4 ohm / 3 W mono speaker</text>
   <text x="40" y="101" class="small warning">Functional reference, not an electrically verified module schematic. Confirm breakout supply voltages and exact package pinouts.</text>
 
+  <g id="power-distribution">
   <text x="40" y="145" class="heading">1. Protected power distribution</text>
-  <rect x="50" y="185" width="170" height="110" class="box"/>
-  <text x="70" y="214" class="part">VTC5A pack</text>
-  <text x="70" y="238" class="small">1S, cells in parallel</text>
-  <text x="70" y="260" class="small">3.6 V nom / 4.2 V max</text>
-  <text x="70" y="282" class="tiny muted">Match capacity and IR</text>
-  <text x="225" y="200" class="small positive">+</text>
-  <text x="225" y="285" class="small">-</text>
-  <path d="M220 210 H255 M345 210 H390" class="supply"/>
-  <rect x="255" y="200" width="90" height="20" fill="white" stroke="#b62c35" stroke-width="2"/>
-  <text x="247" y="183" class="small">F1, near cell +</text>
-  <path d="M220 270 H390" class="wire"/>
+  <rect x="50" y="185" width="220" height="135" class="box"/>
+  <text x="70" y="216" class="part">2 x VTC5A</text>
+  <text x="70" y="240" class="small">1S2P parallel pack</text>
+  <text x="70" y="264" class="small">3.6 V nom / 4.20 V full</text>
+  <text x="70" y="295" class="tiny muted">Matched cells: + to +, - to -</text>
+  <text x="277" y="200" class="small positive">+</text>
+  <text x="277" y="285" class="small">-</text>
+  <path d="M270 210 H300 M360 210 H390" class="supply"/>
+  <rect x="300" y="200" width="60" height="20" fill="white" stroke="#b62c35" stroke-width="2"/>
+  <text x="288" y="183" class="small">F1, near pack +</text>
+  <path d="M270 270 H390" class="wire"/>
   <rect x="390" y="180" width="260" height="140" class="box"/>
   <text x="420" y="250" class="part">Documented 1S PCM</text>
   <text x="403" y="213" class="small">B+</text>
   <text x="403" y="274" class="small">B-</text>
   <text x="616" y="213" class="small">P+</text>
   <text x="616" y="274" class="small">P-</text>
-  <path d="M650 210 H700" class="supply"/>
-  <path d="M650 270 H700" class="wire"/>
-  <circle cx="700" cy="210" r="4" fill="#b62c35"/>
-  <circle cx="700" cy="270" r="4" class="dot"/>
-
-  <path d="M700 210 H740" class="supply"/>
-  <path d="M700 270 H740" class="wire"/>
-  <rect x="740" y="180" width="235" height="140" class="box"/>
-  <text x="758" y="246" class="part">IP5310 / K648</text>
-  <text x="758" y="270" class="small">charge only</text>
-  <text x="752" y="212" class="small">BAT+</text>
-  <text x="752" y="290" class="small">BAT-</text>
-  <text x="915" y="212" class="small muted">OUT+</text>
-  <text x="915" y="290" class="small muted">OUT-</text>
-  <text x="980" y="252" class="tiny muted">n/c</text>
-
-  <path d="M700 210 V165 H1035 V212 H1045" class="supply"/>
-  <path d="M700 270 V330 H1035 V290 H1045" class="wire"/>
-  <text x="815" y="158" class="tiny muted">parallel to IP5310 IN</text>
+  <path d="M650 210 H740 M740 210 L780 185 M800 210 H1045" class="supply"/>
+  <circle cx="740" cy="210" r="4" fill="#b62c35"/>
+  <circle cx="800" cy="210" r="4" fill="#b62c35"/>
+  <text x="661" y="198" class="small">PCM P+</text>
+  <text x="740" y="166" class="small">SW_LOAD</text>
+  <text x="858" y="198" class="small positive">SW_BAT+</text>
+  <text x="845" y="238" class="small">Also feeds divider (panel 5)</text>
+  <path d="M650 270 H710 V290 H1045" class="wire"/>
+  <text x="850" y="282" class="small">LOAD_GND</text>
   <rect x="1045" y="180" width="195" height="140" class="box"/>
-  <text x="1053" y="246" class="part">XL6009 boost</text>
-  <text x="1053" y="270" class="small">~5 V + heatsink</text>
-  <text x="1057" y="212" class="small">IN+</text>
-  <text x="1057" y="290" class="small">IN-</text>
-  <text x="1178" y="212" class="small">OUT+</text>
-  <text x="1178" y="290" class="small">OUT-</text>
-
-  <path d="M1240 210 H1258 M1258 210 L1280 194 M1286 210 H1290" class="supply"/>
-  <circle cx="1258" cy="210" r="4" fill="#b62c35"/>
-  <circle cx="1286" cy="210" r="4" fill="#b62c35"/>
-  <text x="1248" y="186" class="small">SW_LOAD</text>
-  <path d="M1240 270 H1290" class="wire"/>
+  <text x="1060" y="245" class="part">TPS61088</text>
+  <text x="1060" y="267" class="small">JXL V1.10 / 5.00 V</text>
+  <text x="1057" y="214" class="small">IN+</text>
+  <text x="1057" y="294" class="small">IN-</text>
+  <text x="1178" y="214" class="small">OUT+</text>
+  <text x="1178" y="294" class="small">OUT-</text>
+  <path d="M1240 210 H1290" class="supply"/>
+  <path d="M1240 290 H1290" class="wire"/>
   <rect x="1290" y="180" width="290" height="140" class="box"/>
   <text x="1308" y="212" class="part">LOAD_5V star</text>
   <text x="1308" y="242" class="small">Separate load branches</text>
-  <text x="1308" y="274" class="part">LOAD_GND star</text>
-  <text x="745" y="352" class="small">IP5310 OUT unused - battery charging only.</text>
-  <text x="1045" y="352" class="small">XL6009 set ~5 V; 1000 uF + 100 nF at output; heatsink the IC.</text>
-  <text x="50" y="350" class="small">A protected pack already contains a PCM.</text>
-  <text x="50" y="374" class="small warning">Never join raw B- to system GND around the protection.</text>
-  <text x="750" y="374" class="small">All LOAD_GND labels below join the protected system return, not raw cell negative.</text>
-  <line x1="40" y1="392" x2="1600" y2="392" class="rule"/>
-
+  <text x="1308" y="294" class="part">LOAD_GND star</text>
+  <text x="1045" y="345" class="small">Check 1000 uF + 100 nF at output;</text>
+  <text x="1045" y="367" class="small">verify JXL startup/inrush and allowable capacitance.</text>
+  <text x="50" y="350" class="small warning">Never join raw B- to system GND around the protection.</text>
+  <text x="50" y="375" class="small">Switch cuts boost AND divider input; charger stays connected.</text>
+  <text x="755" y="365" class="small">USB-C 5 V: charger input only</text>
+  <path d="M880 375 V400" class="supply"/>
+  <rect x="750" y="400" width="280" height="120" class="box"/>
+  <text x="810" y="456" class="part">IP5310 / K648</text>
+  <text x="810" y="480" class="small">charge only</text>
+  <text x="765" y="424" class="small">BAT+</text>
+  <text x="765" y="494" class="small">BAT-</text>
+  <text x="975" y="424" class="small muted">OUT+</text>
+  <text x="975" y="494" class="small muted">OUT-</text>
+  <path d="M650 420 H750" class="supply"/>
+  <text x="650" y="408" class="small">PCM P+</text>
+  <path d="M650 490 H750" class="wire"/>
+  <text x="650" y="478" class="small">LOAD_GND</text>
+  <text x="1090" y="425" class="small">OUT+/- unused; KEY driver removed.</text>
+  <text x="1090" y="450" class="small">No USB/boost source switching; no EN control.</text>
+  <text x="1090" y="475" class="small warning">Sleep is NOT a battery disconnect.</text>
+  <text x="1090" y="500" class="small">Verify module limits and charge termination.</text>
+  <text x="50" y="435" class="small">Named PCM P+, SW_BAT+ and LOAD_GND nets join.</text>
+  <text x="50" y="460" class="small">BAT pads mean cell terminals, not USB VBUS.</text>
+  <text x="50" y="485" class="small">1S protection and fuse must suit total pack current.</text>
+  <text x="50" y="510" class="small">Use matched, safely assembled cells; never a 2S holder.</text>
+  <line x1="40" y1="552" x2="1600" y2="552" class="rule"/>
+  </g>
+  <g transform="translate(0 160)">
   <text x="40" y="425" class="heading">2. ESP32, storage, NFC and encoder</text>
   <rect x="60" y="455" width="220" height="365" class="box"/>
   <text x="80" y="490" class="part">Classic ESP32</text>
@@ -101,7 +109,7 @@
   <text x="80" y="560" class="small">VIN/5V: LOAD_5V</text>
   <text x="80" y="589" class="small">GND: LOAD_GND</text>
   <text x="80" y="618" class="small">3V3: logic supply</text>
-  <text x="80" y="660" class="small">GPIO16/17 require</text>
+  <text x="80" y="660" class="small">GPIO16 requires</text>
   <text x="80" y="683" class="small">no PSRAM conflict.</text>
   <text x="80" y="728" class="small warning">No 5 V on GPIOs.</text>
   <text x="80" y="775" class="small">Other GPIO nets appear</text>
@@ -248,30 +256,28 @@
   <text x="818" y="1497" class="part">4 ohm / 3 W mono</text>
   <text x="818" y="1520" class="small warning">Neither lead to GND</text>
 
-  <text x="1090" y="925" class="heading">5. KEY driver and cold-start contact</text>
-  <rect x="1365" y="978" width="128" height="110" class="box"/>
-  <text x="1381" y="1004" class="part">2N3904</text>
-  <text x="1374" y="1040" class="small">B</text>
-  <text x="1440" y="974" class="tiny">C</text>
-  <text x="1425" y="1079" class="tiny">E</text>
-  <path d="M1095 1030 H1195 M1275 1030 H1365" class="signal green"/>
-  <rect x="1195" y="1020" width="80" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
-  <text x="1095" y="1015" class="small">GPIO17</text>
-  <text x="1220" y="1010" class="small">1k</text>
-  <path d="M1430 978 V954 H1560 V1010 M1560 1045 V1130 H1320 M1430 1088 V1130 M1320 1030 V1070 M1320 1102 V1130" class="wire"/>
-  <text x="1360" y="947" class="small">IP5310 KEY</text>
-  <rect x="1312" y="1070" width="16" height="32" fill="white" stroke="#26343c" stroke-width="2"/>
-  <text x="1260" y="1091" class="small">10k</text>
-  <circle cx="1320" cy="1030" r="3" class="dot"/>
-  <path d="M1560 1010 L1540 1041" class="wire"/>
-  <circle cx="1560" cy="1010" r="3" class="dot"/>
-  <circle cx="1560" cy="1045" r="3" class="dot"/>
-  <text x="1505" y="1080" class="tiny">NO button /</text>
-  <text x="1505" y="1098" class="tiny">service contact</text>
-  <text x="1370" y="1154" class="small">LOAD_GND</text>
-  <text x="1100" y="1204" class="small">GPIO4 encoder switch stays separate from KEY.</text>
-  <text x="1100" y="1229" class="small">KEY transistor can tap only while ESP32 is powered.</text>
-  <text x="1100" y="1254" class="small">Check the actual TO-92 transistor pin order.</text>
+  <g id="battery-divider">
+  <text x="1090" y="925" class="heading">5. Battery divider (ADC1)</text>
+  <text x="1120" y="965" class="small positive">SW_BAT+ (after load switch)</text>
+  <path d="M1310 978 V1000" class="supply"/>
+  <rect x="1302" y="1000" width="16" height="56" class="box"/>
+  <text x="1340" y="1022" class="small">R_BAT_TOP</text>
+  <text x="1340" y="1046" class="small">100k, 1%</text>
+  <path d="M1310 1056 V1140 M1310 1100 H1570 M1470 1100 V1148" class="signal green"/>
+  <circle cx="1310" cy="1100" r="4" class="dot"/>
+  <circle cx="1470" cy="1100" r="4" class="dot"/>
+  <text x="1360" y="1080" class="small">GPIO34 / ADC1_CH6</text>
+  <text x="1495" y="1124" class="tiny">Input only</text>
+  <rect x="1302" y="1140" width="16" height="56" class="box"/>
+  <text x="1110" y="1158" class="small">R_BAT_BOTTOM</text>
+  <text x="1110" y="1180" class="small">47k, 1%</text>
+  <path d="M1452 1148 H1488 M1452 1156 H1488" class="wire"/>
+  <text x="1498" y="1150" class="small">100 nF</text>
+  <text x="1498" y="1172" class="small">X7R</text>
+  <path d="M1310 1196 V1230 H1470 V1156" class="wire"/>
+  <text x="1265" y="1255" class="small">LOAD_GND (P-)</text>
+  <text x="1100" y="1281" class="small warning">Not raw B-. No battery/5 V directly on GPIO.</text>
+  </g>
   <text x="1100" y="1305" class="part">Physical assembly</text>
   <text x="1100" y="1334" class="small">1.5 mm2 main buses; 0.5 mm2 load branches.</text>
   <text x="1100" y="1359" class="small">0.33 mm2 short signal wires with nearby returns.</text>
@@ -284,7 +290,7 @@
   <line x1="40" y1="1560" x2="1600" y2="1560" class="rule"/>
   <text x="40" y="1590" class="small">Named LOAD_5V / LOAD_GND nets connect across panels. SPI lines are grouped; individual assignments are in PINOUT.md.</text>
   <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
-  <text x="40" y="1640" class="small warning">No charging or programming USB is included in this battery-only drawing. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
+  <text x="40" y="1640" class="small warning">Charging input is shown at IP5310 only. Dual-USB operation is unverified. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
   <g aria-label="Signal and power wire color key">
     <path d="M40 1660 H58" class="signal white"/><text x="64" y="1665" class="tiny">CS/SS, LED data</text>
     <path d="M155 1660 H173" class="signal blue"/><text x="179" y="1665" class="tiny">clocks (SCK/BCLK)</text>
@@ -294,5 +300,6 @@
     <path d="M820 1660 H838" class="signal pink"/><text x="844" y="1665" class="tiny">I2S data and sync</text>
     <path d="M1065 1660 H1083" class="wire"/><text x="1089" y="1665" class="tiny">GND / negative</text>
     <path d="M1225 1660 H1243" class="supply"/><text x="1249" y="1665" class="tiny">VCC / 5V positive</text>
+  </g>
   </g>
 </svg>

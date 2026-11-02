@@ -106,21 +106,22 @@ use the specified tolerance or verify with a known safe current and voltage.
 
 ### Battery-side connection for a grounded scope
 
-The following assumes the K648 has a verified common BAT-/OUT- return, as in the
-project wiring. Check that with all power disconnected; if it is not common, do
-not bridge unknown terminals. For an externally protected cell, P- below is the
+The following assumes the TPS61088 module has a verified common IN-/OUT- return.
+Check that with all power disconnected; do not bridge unknown terminals. IP5310
+OUT is unused. For an externally protected pack, P- below is the
 PCM's protected output, NOT raw cell negative/B-. For a protected battery pack,
 use its documented protected output terminals. Keep the existing fuse/protection.
 
 ```text
-Fused/protected 1S source P+ --------------------------> IP5310 BAT+
+Fused/protected 1S source P+ --+-----------------------> IP5310 BAT+
+                             +-- SW_LOAD --> SW_BAT+ -> TPS61088 IN+ and divider top
 
 Protected P- ----o----[ R_SHUNT = 0.010 ohm ]----o------> IP5310 BAT-
-                |                              |         and OUT-/system GND
+                |                              |         TPS61088 IN-/OUT-/system GND
             CH1 probe tip                 ALL scope ground clips
                                           All player grounds stay here
 
-IP5310 OUT+ --> load switch --> LOAD_5V ----> CH2 probe tip (at ESP32 VIN)
+TPS61088 OUT+ --> LOAD_5V -----------------> CH2 probe tip (at ESP32 VIN)
 
 Discharge return current flows through the shunt from right to left.
 ```
@@ -143,6 +144,8 @@ Do not let a USB cable, bench supply, programmer or another instrument create a
 parallel return. Do not defeat the scope's protective earth, and do not assume
 a battery-powered/USB scope has individually isolated channels. Attach probes
 with the circuit off. This setup is only for the isolated battery-only test.
+The divider bottom and filter return stay on system GND, right of the shunt.
+Remove the shunt before ADC calibration; its voltage drop changes the reading.
 
 ### Capture procedure
 
@@ -178,7 +181,7 @@ Exact trigger/menu settings depend on the scope and probe model.
 ### Other current locations
 
 To measure the boost's **5 V load current**, a shunt in the positive feed between
-the load switch and LOAD_5V star preserves the common ground. That requires a
+TPS61088 OUT+ and LOAD_5V star preserves the common ground. That requires a
 proper differential measurement or suitable current probe; do not clip a normal
 scope ground to either high-side shunt terminal. Differential probes must resolve
 millivolts on a roughly 5 V common-mode signal; many high-voltage probes are too
@@ -196,29 +199,78 @@ tests; those need a separately reviewed measurement connection.
 1. Place modules/socket footprints on a 200 x 150 mm cardboard layout including
    mounting holes, motor/belt plane, speaker, battery and wire clearance. Keep
    PN532 antenna away from metal/battery/motor; test tag reading through the lid.
-2. Build only protected battery/IP5310/switch/star distribution first. Check
+2. Build only protected pack/IP5310/TPS61088/switch/star distribution first. Check
    polarity, shorts and unloaded output before fitting expensive boards.
-3. Test boost with a known dummy load and KEY. Stable 5 V must exist without any
+3. Test TPS61088 with a known dummy load and SW_LOAD. Stable 5 V must exist without any
    ESP32 firmware. Reject excess voltage, unexpected cycling or heat.
-4. Socket and add ESP32, then SD/PN532, then AHCT/LED/amp with motor disconnected.
+4. Verify the divider with a meter before connecting GPIO34. Socket and add ESP32,
+   then SD/PN532, then AHCT/LED/amp with motor disconnected; calibrate ADC below.
    Never change wiring live. For programming disconnect the player harness from
    ESP32 and use its USB alone, then remove USB before reconnecting battery wiring.
 5. Add driver/flyback/motor last. First test without belt, then with the final
    platter. Keep amp muted/LEDs black during the ramp as firmware does.
-6. Confirm every reset leaves gate LOW, amp off and KEY released. Measure 5 V,
+6. Confirm every reset leaves gate LOW and amp off. Measure 5 V,
    3.3 V, battery current and motor voltage at start. No extended stall tests.
-7. Measure sleep current and wake behavior both before and after actual IP5310
-   shutdown. Only then choose one-control hardware or fit the fallback KEY button.
+7. Measure normal sleep current and encoder wake, plus low-battery sleep without
+   button wake. Confirm SW_LOAD removes boost AND divider power; no KEY driver remains.
 8. Put strain relief, insulation and standoffs in before enclosure testing. Leave
-   a service connector for KEY and access to the fuse/switch. Do not rely on loose
+   access to the fuse/switch and battery sense test points. Do not rely on loose
    breadboard contacts or perfboard pad islands for multi-amp return paths.
 
-## KEY characterization
+## Battery voltage calibration and cutoff
 
-Measure KEY open voltage and tap/hold/double-tap behavior with a high-impedance
-meter/scope. Do not measure pull-up current by putting an ammeter straight across
-unidentified terminals. For a source-resistance estimate use a known high-value
-resistor, reduce cautiously only after verifying voltages and dissipation.
+The 1S2P VTC5A pack is about 3.6 V nominal and 4.20 V full, just like one cell.
+Do not calibrate to "3.7 V", assume a freshly charged cell is exactly 4.20 V,
+or map voltage linearly to a charge percentage. Use a meter and the actual
+protected, switched boost-input voltage. All steps below are unverified procedures.
+
+1. With power off, check 100k from SW_BAT+ to the ADC node and 47k/100nF from that
+   node to LOAD_GND. Check parts individually if in-circuit paths affect the meter.
+   Initially leave GPIO34 disconnected. Power only the validated supply and
+   divider; verify `V_ADC = V_SW_BAT * 47 / 147` (about 1.343 V at 4.20 V).
+   Power off before attaching GPIO34. Never expose it directly to the pack/5 V.
+2. Use a healthy pack above 3.50 V for boot. Read the log at 115200 baud without
+   connecting DevKit USB alongside the boost. One bench option is a verified
+   **receive-only 3.3 V-compatible USB-UART adapter**: ESP32 TX0/GPIO1 to adapter
+   RX, adapter GND to LOAD_GND; leave adapter VCC, TX, DTR and RTS disconnected.
+   Confirm its RX is high impedance and remove the RX lead before powering the
+   ESP32 down. No charger, shunt setup or other grounded instrument in this
+   logging setup. An appropriate isolated receiver is another option; never
+   assume a generic USB isolator solves board power-path conflicts.
+3. With the player idle and voltage stable, use an isolated handheld meter across
+   **SW_BAT+ and LOAD_GND** and record the simultaneous `pack: ... mV` log. Do not
+   use the ADC-pin reading as the pack reading or measure raw B- to system GND.
+   Start with `BATTERY_CALIBRATION_PERMILLE = 1000` in config.h.
+4. Calculate the new factor below, round to the nearest integer, rebuild/upload
+   with the player harness disconnected, remove programming USB and reconnect.
+   Example: meter 3900 mV, firmware 3750 mV, old factor 1000 gives **1040**.
+   If correction is outside 800-1200, investigate values/wiring/ADC range instead
+   of relaxing the configuration check.
+5. Recheck at another healthy voltage, for example 3.6 V and 4.1 V, and near
+   cutoff using the supply test below. Aim for agreement within about 50 mV
+   around cutoff; this is a bench acceptance target, not guaranteed ADC accuracy.
+   A one-factor correction cannot fix substantial nonlinearity or ground noise.
+   Record error under load and leave extra cutoff margin if needed.
+
+$$
+C_{new}=\operatorname{round}\left(C_{old}\frac{V_{meter}}{V_{reported}}\right)
+$$
+
+**Cutoff test:** disconnect the real pack and charging USB completely. Substitute
+a suitable current-limited bench supply at the protected-source interface, with
+current limit/wiring adequate for the measured startup load; never parallel it
+with the cells. Begin at 3.8-4.0 V, verify stable 5 V output, then reduce slowly.
+Validate at/below 3.30 V for 2 s stops motor/audio/NFC polling and clears LEDs;
+a shorter dip followed by recovery does not. Validate <=3.00 V stops on the next
+sample without the 2 s delay. Loop/library delays mean no hard deadline is
+promised. Do not deliberately over-discharge the actual VTC5A cells for this test.
+
+Confirm a held encoder cannot prevent shutdown, voltage rebound cannot restart
+playback, and the button cannot wake low-battery sleep. Restore a healthy supply
+and power-cycle: boot at >=3.50 V must work; boot below it must not start SD/NFC
+or audio. Verify normal user/idle sleep still wakes by encoder. Measure remaining
+sleep current and open SW_LOAD afterward; software has not disconnected the
+boost/peripherals. Keep the PCM and validate its documented limits independently.
 
 ## Choosing the motor ramp duration
 
@@ -249,13 +301,14 @@ and NFC delays. A 2 s motor ramp therefore cannot meet a 2 s total startup targe
 
 | ID | Action | Required observation |
 |---|---|---|
-| B1 | Player disconnected: test protected cell/IP5310 with KEY and a known, rated dummy load, increasing only within the module/cell/wiring ratings. | Clean startup and stable output at the intended load; no excessive voltage, cycling or heating. Characterize no-load auto-off separately. |
-| B2 | Connect ESP32, SD, PN532, buffers, amp and ring; leave motor disconnected. Cold-start without a tag and remain awake/idle for at least 2 minutes. | Motor command off, amp muted, no resets; KEY keep-alive prevents the previously observed approximately 30 s idle dropout while awake. All connected GPIO peripherals remain powered. |
+| B1 | Player disconnected: test protected pack/TPS61088 with SW_LOAD and a known, rated dummy load, increasing only within the module/pack/wiring ratings. | Clean startup and stable 5 V at intended load and operating input range; no excessive voltage, cycling or heating. |
+| B2 | Connect ESP32, calibrated divider, SD, PN532, buffers, amp and ring; leave motor disconnected. Cold-start without a tag and remain awake/idle for at least 2 minutes. | Motor command off, amp muted, no resets; TPS61088 sustains the rail without KEY pulses. All connected GPIO peripherals remain powered. |
 | B3 | Power off, connect motor with belt removed. Trial 1000 ms ramp using a known tag/MP3 and the quiet settings below; make five starts from rest. | Repeatable unassisted rotation, acceptable rail/current traces, no abnormal heat. Remove the tag during a ramp to confirm drive is cancelled. |
 | B4 | Fit the real belt/platter. Compare 600, 1000 and, only if useful, 2000 ms; make five starts per candidate with the quiet settings and comparable cell voltage. Skip a candidate after an unsafe result. | Record breakaway and acceleration, not just absence of brownout. Select the shortest reliable ramp with acceptable supply margin; do not hand-start the platter. |
 | B5 | Restore normal audio/LED settings. Test the selected ramp at the loudest intended volume and brightest enabled pattern, with a full cell and again near the chosen lower operating limit. Make ten starts at each condition. | All starts succeed; motor load plus audio/LED fade causes no reset, audio dropout, LED corruption, rail violation or protection trip. Record battery sag and component temperatures. |
 | B6 | Run representative playback for 10 minutes, extending to 30 minutes only if stable; exercise all three repeats, tag changes, removal during ramp and missing MP3. | Replays remain reliable; temperature stays within component/cell limits without continuing abnormal rise. No tag or missing MP3 means motor off. For approximate speed, ten platter turns take about 18 s. |
-| B7 | Test 1.5 s hold/release sleep and 5-minute idle sleep. Wait at least 60 s after sleeping and monitor the rails, extending observation if auto-off is not yet clear. | Motor/amp off, KEY released; measure actual standby current. Encoder wake works only while rails remain valid. If boost shuts down, KEY restores a clean cold boot; record lingering low voltage or reset cycling as a problem. |
+| B7 | Test 1.5 s hold/release sleep and 5-minute idle sleep. Observe rails/current for at least 60 s, then wake by encoder with a healthy pack. | Motor/amp off, LEDs black; normal encoder wake works while powered. Measure remaining draw; do not assume TPS61088 turns off. SW_LOAD must remove boost and divider input together. |
+| B8 | Perform the battery ADC calibration and cutoff procedure above with a substitute supply, not by over-discharging cells. | Verified voltage accuracy, startup refusal, dip filtering, shutdown and no button wake in low-battery sleep. Record residual current and switch off afterward. |
 
 For B3/B4 only, set `INITIAL_VOLUME = 0`, `LED_BRIGHTNESS = 0` AND
 `LED_START_BRIGHTNESS = 0` in the test image. Both LED values must be zero to pass
@@ -263,14 +316,13 @@ the configuration check. Leave peripheral supplies connected: these settings
 suppress sound/light, not electronics' idle current. Keep the normal SD/NFC/MP3
 path so the real motor algorithm runs. Restore the original settings for B5.
 
-During B3-B5 capture both the motor start and the later audio/LED onset. Also check
-KEY release during ramp/playback: approximately 120 ms LOW every 20 s while awake,
-not a LOW stretched by the main loop. Repeat any configuration change with the
+During B3-B5 capture both the motor start and the later audio/LED onset, including
+voltage sag at the converter input. Repeat any configuration change with the
 isolated USB upload procedure above. Never run a hard full-duty stall as a
 comparison test.
 
 If the quiet loaded test fails, investigate friction, motor drive, battery sag,
-connections and IP5310 capacity before adding audio load. If only the later fade
+connections and TPS61088 capacity before adding audio load. If only the later fade
 fails, investigate total power demand and whether motor acceleration is still in
 progress. A 2 s ramp is useful only when measurements show a benefit. More mAh or
 a longer delay cannot fix an inadequate continuous-current supply.
@@ -292,10 +344,10 @@ stage passes. Read [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) before changing it
 | ID | Prerequisite and action | Required observation |
 |---|---|---|
 | U1: charge only | Player disconnected/load switch open; DevKit USB absent. Verify the K648 charge voltage/current against the chosen cell, then use a suitable regulated 5 V USB source on K648 only. Observe charge completion and plug/unplug. | Correct cell voltage/current and termination; acceptable cell/module temperatures. The battery can charge with the load switch open. A battery-disconnect switch is a different case. |
-| U2: play while charging | B1-B7 and U1 passed; DevKit USB still absent. Start with idle, then selected-ramp playback. Connect/disconnect K648 charging USB during idle, ramp and steady playback, five times per state. | Rail targets maintained, no resets/dropouts or reverse power into the charger. At a partly discharged cell, measure whether net battery current actually charges it under the intended load; a charge LED is not proof. Recheck full-charge termination with the player running. |
+| U2: play while charging | B1-B8 and U1 passed; DevKit USB still absent. Start with idle, then selected-ramp playback. Connect/disconnect K648 charging USB during idle, ramp and steady playback, five times per state. | Rail targets maintained, no resets/dropouts or reverse power into the charger. At a partly discharged cell, measure whether net battery current actually charges it under the intended load; a charge LED is not proof. Recheck full-charge termination with the player running. |
 | U3: isolated programming while charging | U1 passed. Open the load switch and physically disconnect the complete player harness, including GPIOs, from ESP32. Charge the cell through K648 USB while programming ESP32 through its own PC USB. | Programming succeeds and charging remains correct. The two 5 V rails are not joined through ESP32; this tests simultaneous charging/programming, not playback. Disconnect PC USB before restoring the harness. |
 | U4: both USB cables, fully wired | NOT READY until the actual DevKit and K648 power paths are documented and an appropriate power-mux/reverse-blocking or verified data-only arrangement is implemented. Account for GPIO back-power and USB bridge power/detection too. Verify with protected/current-limited sources and dummy loads before using the PC. | No uncontrolled source-to-source current or powered-off peripheral back-feed in any permitted cable/switch state; all source-current limits respected. One series diode, a common ground, or an unspecified USB isolator does not establish this. |
-| U5: integrated transitions | U4 passed. Test charger-first and PC-first connection order, removal of each cable, reset and upload, first idle then during playback. Repeat five times and observe both rails, source currents and safe outputs. | Programming resets are expected: motor off, amp muted and KEY released during reset. No stuck-on drive, unsafe transient or unintended USB powering of the player. Resume playback only through the normal tag/start sequence. |
+| U5: integrated transitions | U4 passed. Test charger-first and PC-first connection order, removal of each cable, reset and upload, first idle then during playback. Repeat five times and observe both rails, source currents and safe outputs. | Programming resets are expected: motor off and amp muted during reset. No stuck-on drive, unsafe transient or unintended USB powering of the player. Resume playback only through the normal tag/start sequence. |
 
 For U2, distinguish **plays while USB is attached** from **charges while playing**.
 Input power must cover the player, charging and conversion losses. A weak source,

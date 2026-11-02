@@ -11,50 +11,60 @@
 #endif
 
 bool PowerControl::begin() {
-  for (uint8_t pin : {Pins::MOTOR_GATE, Pins::AMP_ENABLE, Pins::IP5310_KEY}) {
+  for (uint8_t pin : {Pins::MOTOR_GATE, Pins::AMP_ENABLE}) {
     digitalWrite(pin, LOW);
     pinMode(pin, OUTPUT);
   }
   Serial.begin(Config::SERIAL_BAUD);
   Serial.printf("Reset reason: %d; wake cause: %d\n",
                 static_cast<int>(esp_reset_reason()), static_cast<int>(esp_sleep_get_wakeup_cause()));
-  lastPulse_ = millis();
-  if (!Config::KEY_KEEPALIVE_ENABLED) return true;
-  esp_timer_create_args_t args = {};
-  args.callback = releaseKey;
-  args.name = "key_release";
-  if (esp_timer_create(&args, &releaseTimer_) != ESP_OK) return false;
-  enabled_ = true;
+  pinMode(Pins::BATTERY_ADC, INPUT);
+  analogReadResolution(12);
+  analogSetPinAttenuation(Pins::BATTERY_ADC, ADC_6db);
+  delay(20);
+  sampleBattery();
+  sampledAt_ = loggedAt_ = millis();
+  logBattery();
   return true;
 }
 
-void PowerControl::releaseKey(void *) { digitalWrite(Pins::IP5310_KEY, LOW); }
+void PowerControl::sampleBattery() {
+  uint32_t total = 0;
+  for (uint8_t sample = 0; sample < Config::BATTERY_ADC_SAMPLES; ++sample) {
+    total += analogReadMilliVolts(Pins::BATTERY_ADC);
+  }
+  adcMillivolts_ = (total + Config::BATTERY_ADC_SAMPLES / 2) / Config::BATTERY_ADC_SAMPLES;
+  batteryMillivolts_ = batteryMillivoltsFromAdc(adcMillivolts_);
+}
+
+void PowerControl::logBattery() const {
+  Serial.printf("Battery ADC: %lu mV; pack: %lu mV\n",
+                static_cast<unsigned long>(adcMillivolts_), static_cast<unsigned long>(batteryMillivolts_));
+}
 
 void PowerControl::tick(uint32_t now) {
-  if (!enabled_ || esp_timer_is_active(releaseTimer_)) return;
-  if (now - lastPulse_ < Config::KEY_INTERVAL_MS) return;
-  lastPulse_ = now;
-  digitalWrite(Pins::IP5310_KEY, HIGH);
-  if (esp_timer_start_once(releaseTimer_, static_cast<uint64_t>(Config::KEY_PULSE_MS) * 1000ULL) != ESP_OK) {
-    releaseKey(nullptr);
-    Serial.println("KEY release timer failed; pulse cancelled");
+  if (now - sampledAt_ >= Config::BATTERY_SAMPLE_MS) {
+    sampledAt_ = now;
+    sampleBattery();
+  }
+  if (now - loggedAt_ >= Config::BATTERY_LOG_MS) {
+    loggedAt_ = now;
+    logBattery();
   }
 }
 
-void PowerControl::disableKeepAlive() {
-  enabled_ = false;
-  if (releaseTimer_ != nullptr) esp_timer_stop(releaseTimer_);
-  releaseKey(nullptr);
-}
-
-void PowerControl::sleep() {
-  disableKeepAlive();
+void PowerControl::sleep(bool allowButtonWake) {
   digitalWrite(Pins::AMP_ENABLE, LOW);
-  rtc_gpio_pullup_en(static_cast<gpio_num_t>(Pins::ENCODER_SW));
-  rtc_gpio_pulldown_dis(static_cast<gpio_num_t>(Pins::ENCODER_SW));
-  if (esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(Pins::ENCODER_SW), LOW) != ESP_OK) {
-    Serial.println("Wake-source configuration failed; restart required");
-    return;
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  if (allowButtonWake) {
+    rtc_gpio_pullup_en(static_cast<gpio_num_t>(Pins::ENCODER_SW));
+    rtc_gpio_pulldown_dis(static_cast<gpio_num_t>(Pins::ENCODER_SW));
+    if (esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(Pins::ENCODER_SW), LOW) != ESP_OK) {
+      Serial.println("Wake-source configuration failed; restart required");
+      return;
+    }
+  } else {
+    Serial.println("Battery voltage unsafe; recharge and power-cycle. Button wake disabled.");
   }
   Serial.println("Deep sleep; peripheral power is not disconnected");
   Serial.flush();

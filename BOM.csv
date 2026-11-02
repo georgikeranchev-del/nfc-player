@@ -1,15 +1,19 @@
 Id,Quantity,Part,Status,Notes
 U_ESP32,1,ESP32 DevKit V1 WROOM-32,keep,Confirm classic WROOM without PSRAM
-U_POWER,1,IP5310 K648 module,keep,Characterize battery startup and KEY behavior
-BAT1,1,1S 18650 Li-ion 3.6/3.7V (4.2V charge),verify,Genuine 2500-3500mAh; prefer >=10A continuous; verify charge-current compatibility; see WIRING.md
-PROTECTION,1,Documented 1S PCM or built-in protected cell,select,Match cell chemistry and charge/discharge limits; allow measured startup current; see WIRING.md
+U_POWER,1,IP5310 K648 module,keep,Charger only at PCM P+/P-; OUT pins unused; no GPIO KEY connection
+U_BOOST,1,TPS61088 JXL V1.10 DC-DC module,verify,Set to 5.00V before connecting loads; replace XL6009; verify board input range and UVLO; no EN control implemented
+BAT1,2,Murata/Sony US18650VTC5A Li-ion cell,keep,Matched parallel 1S2P pack; 3.6V nominal and 4.20V full pack voltage; shared suitable 1S PCM; see WIRING.md
+PROTECTION,1,Documented 1S PCM for the 1S2P pack,verify,Match cell chemistry and total pack charge/discharge limits; software sleep is not isolation
 F1,1,DC fuse and insulated holder,select,Near cell positive; current/time curve selected after measurement
-SW_LOAD,1,DC-rated SPST switch,verify,Use existing switch on LOAD_5V if suitably rated
+SW_LOAD,1,DC-rated SPST switch,verify,PCM P+ to switched boost input and divider top; charger stays unswitched; rate for battery current
+R_BAT_TOP,1,100k ohm 1% metal-film resistor 0.25W,buy,SW_BAT+ to GPIO34 ADC node; not raw cell positive or regulated 5V
+R_BAT_BOTTOM,1,47k ohm 1% metal-film resistor 0.25W,buy,GPIO34 ADC node to protected LOAD_GND
+C_BAT_FILTER,1,100nF X7R ceramic >=16V,buy,GPIO34 ADC node to LOAD_GND close to ESP32; separate from supply bypass caps
 U_SD,1,SD breakout and card,keep,Confirm module supply voltage and 3.3V SPI signals
 U_NFC,1,PN532 SPI breakout,keep,Verify power/logic requirements and SPI mode
 U_AMP,1,MAX98357A seven-pin module,keep,SD via AHCT buffer; no speaker terminal to ground
 SPK1,1,Mono speaker 4ohm 3W,keep,User-confirmed rating; avoid sustained clipping; neither terminal to ground
-ENC1,1,Incremental encoder with NO push,keep,GPIO4 push switch remains separate from KEY
+ENC1,1,Incremental encoder with NO push,keep,GPIO4 push switch to GND; normal sleep wake only; no KEY connection
 LED1,1,24-pixel WS2812B ring,keep,5V and buffered data
 U_BUFFER,1,SN74AHCT125N DIP-14,buy,One channel LED data and one amp SD; not HC125
 R_LED_DATA,1,330 ohm resistor,keep,Between AHCT output and ring DIN
@@ -22,11 +26,7 @@ R_GATE,1,100 ohm resistor,keep,Driver output to motor gate
 R_GATE_PD,1,10k resistor,keep,Physically between MOSFET gate and source
 D_MOTOR,1,1N5822 axial Schottky,buy,Motor flyback band toward motor positive; verify current and heat
 M1,1,N20 6V 50RPM motor,keep,Two-wire PWM control; use actual current data
-Q_KEY,1,2N3904 TO-92,verify,Buy only if no working KEY driver; check pin order
-R_KEY_BASE,1,1k resistor,verify,GPIO17 to base
-R_KEY_PD,1,10k resistor,verify,KEY transistor base to emitter
-J_KEY,1,2-pin KEY and GND service connector,buy,Optional momentary NO button can attach here without new enclosure hole now
-C_POWER,1,1000uF electrolytic >=10V,keep,IP5310 output; check polarity and startup inrush
+C_POWER,1,1000uF electrolytic >=10V,verify,TPS61088 5V output; confirm allowed capacitance and startup inrush before retaining
 C_AMP,1,100uF electrolytic >=10V,keep,Local amplifier supply
 C_LED,1,470uF electrolytic >=10V,keep,Local LED supply
 C_MOTOR,1,220uF electrolytic >=10V,keep,Motor supply to ground NOT drain
