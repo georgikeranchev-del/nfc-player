@@ -16,7 +16,7 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | Symbol | GPIO | Component | Wire color | Connection and conditions |
 |---|---|---|---|---|
 | AMP_ENABLE | 2 | U_BUFFER | Green | SN74AHCT125N 2A, pin 5, with 10k to GND; 2Y, pin 6, goes to amplifier SD/SD_MODE. Never connect GPIO2 directly to amplifier SD. Boot-strap review required. |
-| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes normal powered sleep, not low-battery lockout or a switched-off supply. |
+| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes normal powered sleep (retaining soft song inhibition), not hard low-battery sleep or a switched-off supply. |
 | PN532_SS | 5 | U_NFC | White | PN532 SS/SSEL; set the module to SPI. Verify reset-state module pulls on this boot-strap pin. |
 | SD_CS | 13 | U_SD | White | SD module CS. |
 | SD_SCK | 14 | U_SD | Blue | SD module SCK/CLK. |

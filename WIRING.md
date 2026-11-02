@@ -139,6 +139,17 @@ USB 5 V input. Confirm the TPS61088 module has a common IN-/OUT- return with all
 power removed. Keep both USB cables unplugged for battery-only tests. No source
 mux, CC1/CC2 detection or converter EN control is implemented.
 
+SW_LOAD open (`0`) leaves the charger connected to the protected pack; closed
+(`1`) allows both the player and charger to use that port. With USB connected,
+the pack can charge, remain approximately neutral or discharge depending on net
+current. This is not a validated load-sharing/charge-termination circuit; test
+both charge completion and net cell current with playback. IP5310 OUT is not a
+charger-present signal because it can also be battery-powered.
+
+On the schematic, only repeated instances of the SAME net label connect.
+PCM P+ and SW_BAT+ are joined only through the closed switch. LOAD_GND is a
+separate return net: never join positive to negative just because both are named.
+
 For battery-only development omit the former series rail diode. Route TPS61088
 output straight to the star. Do not put motor/amp current
 through the ESP32 headers, skinny daisy-chain jumpers or long perfboard solder
@@ -180,14 +191,22 @@ reports ADC millivolts and corrected pack millivolts at boot and every 5 s while
 awake. Follow the [calibration procedure](MANUAL_TESTS.md#battery-voltage-calibration-and-cutoff)
 for the correction formula, safe receive-only logging and cutoff tests.
 
-Conservative initial settings are 3.50 V minimum at boot, shutdown after at or
-below 3.30 V for 2 s, and immediate shutdown at or below 3.00 V on a sampled
-reading. A reading above 4.35 V also stops operation as a wiring/calibration
-fault. These are operating choices to verify under load, not VTC5A absolute
-limits or state-of-charge percentages. Sampling is cooperative, not a hard
-real-time protection circuit.
+Conservative initial settings are 3.50 V minimum for a new song and soft song
+inhibition after 5 s below it. A tag request while inhibited plays
+`/player/low_battery.mp3` once at volume 10 with motor/LEDs off; the warning is
+limited to 10 s. Normal sleep/wake preserves this latch; rebound alone cannot
+clear it. Automatic charging recovery has not been implemented. A true power
+cycle checks startup voltage again. Neither this threshold nor the divider can
+establish that exactly 5-10% capacity remains; calibrate voltage with a meter,
+then characterize the pack under the real load before choosing an SOC estimate.
 
-Low-battery shutdown stops motor/audio/NFC polling, clears LEDs and deep-sleeps
+Hard shutdown still occurs at startup at/below 3.30 V, after at/below 3.30 V
+for 2 s while running, and immediately at/below 3.00 V on a sampled reading.
+A reading above 4.35 V also stops operation as a wiring/calibration fault.
+These are operating choices, not VTC5A absolute limits. Sampling is cooperative,
+not a hard real-time protection circuit.
+
+Hard low-battery shutdown stops motor/audio/NFC polling, clears LEDs and deep-sleeps
 without button or timer wake. Open SW_LOAD, recharge, then switch on again;
 charging alone does not wake it. **Deep sleep does not disconnect the TPS61088,
 SD, PN532 or other rail loads, and the ADC no longer monitors during sleep.**

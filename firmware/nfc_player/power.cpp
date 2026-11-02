@@ -2,6 +2,7 @@
 #include "pins.h"
 #include <Arduino.h>
 #include <driver/rtc_io.h>
+#include <esp_attr.h>
 #include <esp_sleep.h>
 #include <esp_system.h>
 #include <initializer_list>
@@ -9,6 +10,10 @@
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 #error This wiring targets the classic ESP32 WROOM DevKit V1, not C3/S3/WROVER.
 #endif
+
+namespace {
+RTC_DATA_ATTR bool playbackInhibited = false;
+}
 
 bool PowerControl::begin() {
   for (uint8_t pin : {Pins::MOTOR_GATE, Pins::AMP_ENABLE}) {
@@ -18,6 +23,7 @@ bool PowerControl::begin() {
   Serial.begin(Config::SERIAL_BAUD);
   Serial.printf("Reset reason: %d; wake cause: %d\n",
                 static_cast<int>(esp_reset_reason()), static_cast<int>(esp_sleep_get_wakeup_cause()));
+  if (esp_reset_reason() != ESP_RST_DEEPSLEEP) ::playbackInhibited = false;
   pinMode(Pins::BATTERY_ADC, INPUT);
   analogReadResolution(12);
   analogSetPinAttenuation(Pins::BATTERY_ADC, ADC_6db);
@@ -40,6 +46,14 @@ void PowerControl::sampleBattery() {
 void PowerControl::logBattery() const {
   Serial.printf("Battery ADC: %lu mV; pack: %lu mV\n",
                 static_cast<unsigned long>(adcMillivolts_), static_cast<unsigned long>(batteryMillivolts_));
+}
+
+bool PowerControl::playbackInhibited() const { return ::playbackInhibited; }
+
+void PowerControl::inhibitPlayback(bool inhibited) {
+  if (::playbackInhibited == inhibited) return;
+  ::playbackInhibited = inhibited;
+  Serial.println(inhibited ? "Low battery: songs inhibited" : "Battery recovered: songs enabled");
 }
 
 void PowerControl::tick(uint32_t now) {

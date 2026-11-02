@@ -95,8 +95,8 @@
   <text x="1090" y="450" class="small">No USB/boost source switching; no EN control.</text>
   <text x="1090" y="475" class="small warning">Sleep is NOT a battery disconnect.</text>
   <text x="1090" y="500" class="small">Verify module limits and charge termination.</text>
-  <text x="50" y="435" class="small">Named PCM P+, SW_BAT+ and LOAD_GND nets join.</text>
-  <text x="50" y="460" class="small">BAT pads mean cell terminals, not USB VBUS.</text>
+  <text x="50" y="435" class="small">Only identical net labels connect across panels.</text>
+  <text x="50" y="460" class="small warning">Positive nets NEVER connect directly to LOAD_GND.</text>
   <text x="50" y="485" class="small">1S protection and fuse must suit total pack current.</text>
   <text x="50" y="510" class="small">Use matched, safely assembled cells; never a 2S holder.</text>
   <line x1="40" y1="552" x2="1600" y2="552" class="rule"/>
@@ -288,7 +288,7 @@
   <text x="1100" y="1508" class="small">Temporary shunt setup: see MANUAL_TESTS.md.</text>
 
   <line x1="40" y1="1560" x2="1600" y2="1560" class="rule"/>
-  <text x="40" y="1590" class="small">Named LOAD_5V / LOAD_GND nets connect across panels. SPI lines are grouped; individual assignments are in PINOUT.md.</text>
+  <text x="40" y="1590" class="small">Identical net labels connect across panels; differently named nets remain separate unless a wire/component joins them. See PINOUT.md.</text>
   <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
   <text x="40" y="1640" class="small warning">Charging input is shown at IP5310 only. Dual-USB operation is unverified. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
   <g aria-label="Signal and power wire color key">

@@ -9,7 +9,9 @@
 | IP5310 charging | BAT port remains on protected pack; OUT unused. A load at the battery port can affect charging/termination; verify net charging and termination while playing. No automatic source mux. |
 | Cold boot vs sleep | SW_LOAD powers boost and divider together; GPIO4 wakes normal sleep only. KEY driver and pulse timer removed. |
 | Battery ADC | GPIO34 needs 100k/47k 1% divider plus 100nF, protected return and meter calibration. Wire it before using the firmware; missing/zero readings prevent startup. |
-| Low-battery limits | Initial settings: boot >=3.50 V; <=3.30 V for 2 s stops playback; <=3.00 V stops on next sample. Validate against sag/ADC error; these are not cell absolute limits or charge percentages. |
+| Low-battery limits | Songs require >=3.50 V; 5 s below this latches soft inhibition. Hard sleep at startup <=3.30 V, <=3.30 V for 2 s running, or <=3.00 V on next sample. These are not verified 5-10% SOC or cell absolute limits. |
+| Warning audio | Supply /player/low_battery.mp3 on SD. It plays once per new tag request at volume 10, motor/LEDs off, maximum 10 s. Missing/failed warning never permits the song. |
+| Charging recovery | Not implemented pending hardware decision. IP5310 OUT can be battery-powered; battery rebound is not proof of charging. Soft inhibition survives normal deep-sleep wake. Switch off/recharge/power-cycle meanwhile. |
 | Deep sleep current | Converter/peripherals remain connected and ADC monitoring stops. Low-battery sleep disables all wake sources but is not isolation; switch off and recharge. Keep PCM protection and use a hardware disconnect if autonomous cutoff is required. |
 | Boot timing | Stages are minimum offsets; SD/PN532 and decoder calls can block. Two seconds is not a guaranteed deadline. |
 | 3.x support | PWM wrapper has both APIs; reference full stack is core 2.0.17. Don't infer full 3.x audio compatibility. |

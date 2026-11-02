@@ -266,11 +266,23 @@ sample without the 2 s delay. Loop/library delays mean no hard deadline is
 promised. Do not deliberately over-discharge the actual VTC5A cells for this test.
 
 Confirm a held encoder cannot prevent shutdown, voltage rebound cannot restart
-playback, and the button cannot wake low-battery sleep. Restore a healthy supply
-and power-cycle: boot at >=3.50 V must work; boot below it must not start SD/NFC
-or audio. Verify normal user/idle sleep still wakes by encoder. Measure remaining
+playback, and the button cannot wake hard low-battery sleep. Restore a healthy
+supply and power-cycle: boot at >=3.50 V must allow songs; boot at/below 3.30 V
+must not initialize SD/NFC/audio. Between those thresholds, only warning/idle
+operation is permitted. Verify normal user/idle sleep still wakes by encoder. Measure remaining
 sleep current and open SW_LOAD afterward; software has not disconnected the
 boost/peripherals. Keep the PCM and validate its documented limits independently.
+
+**Soft inhibition test:** place a short `/player/low_battery.mp3` on the SD card.
+With the substitute supply above 3.30 V but below 3.50 V, a new tag must play
+that warning at fixed volume 10 with motor/LEDs off, not the tag's song. Remove
+and re-present to request it again; leaving a tag in place must not loop it.
+Removing the tag during a warning must not truncate it. Verify the 10 s timeout,
+missing/corrupt warning behavior, and that hard cutoff preempts the warning.
+Start a song at a healthy voltage, then hold below 3.50 V for 5 s: playback must
+stop but NFC remain active. Brief dips should not stop an already playing song.
+Confirm rebound and normal sleep/wake do not clear inhibition. Automatic charging
+recovery remains unimplemented; do not record charger detection as a passed test.
 
 ## Choosing the motor ramp duration
 
@@ -309,6 +321,7 @@ and NFC delays. A 2 s motor ramp therefore cannot meet a 2 s total startup targe
 | B6 | Run representative playback for 10 minutes, extending to 30 minutes only if stable; exercise all three repeats, tag changes, removal during ramp and missing MP3. | Replays remain reliable; temperature stays within component/cell limits without continuing abnormal rise. No tag or missing MP3 means motor off. For approximate speed, ten platter turns take about 18 s. |
 | B7 | Test 1.5 s hold/release sleep and 5-minute idle sleep. Observe rails/current for at least 60 s, then wake by encoder with a healthy pack. | Motor/amp off, LEDs black; normal encoder wake works while powered. Measure remaining draw; do not assume TPS61088 turns off. SW_LOAD must remove boost and divider input together. |
 | B8 | Perform the battery ADC calibration and cutoff procedure above with a substitute supply, not by over-discharging cells. | Verified voltage accuracy, startup refusal, dip filtering, shutdown and no button wake in low-battery sleep. Record residual current and switch off afterward. |
+| B9 | Perform the soft inhibition/warning test above. | One bounded warning per new request; no motor, song replay or voltage-rebound unlock. Missing warning remains fail-closed. |
 
 For B3/B4 only, set `INITIAL_VOLUME = 0`, `LED_BRIGHTNESS = 0` AND
 `LED_START_BRIGHTNESS = 0` in the test image. Both LED values must be zero to pass
@@ -344,7 +357,7 @@ stage passes. Read [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) before changing it
 | ID | Prerequisite and action | Required observation |
 |---|---|---|
 | U1: charge only | Player disconnected/load switch open; DevKit USB absent. Verify the K648 charge voltage/current against the chosen cell, then use a suitable regulated 5 V USB source on K648 only. Observe charge completion and plug/unplug. | Correct cell voltage/current and termination; acceptable cell/module temperatures. The battery can charge with the load switch open. A battery-disconnect switch is a different case. |
-| U2: play while charging | B1-B8 and U1 passed; DevKit USB still absent. Start with idle, then selected-ramp playback. Connect/disconnect K648 charging USB during idle, ramp and steady playback, five times per state. | Rail targets maintained, no resets/dropouts or reverse power into the charger. At a partly discharged cell, measure whether net battery current actually charges it under the intended load; a charge LED is not proof. Recheck full-charge termination with the player running. |
+| U2: play while charging | B1-B9 and U1 passed; DevKit USB still absent. Start with idle, then selected-ramp playback. Connect/disconnect K648 charging USB during idle, ramp and steady playback, five times per state. | Rail targets maintained, no resets/dropouts or reverse power into the charger. At a partly discharged cell, measure whether net battery current actually charges it under the intended load; a charge LED is not proof. Recheck full-charge termination with the player running. |
 | U3: isolated programming while charging | U1 passed. Open the load switch and physically disconnect the complete player harness, including GPIOs, from ESP32. Charge the cell through K648 USB while programming ESP32 through its own PC USB. | Programming succeeds and charging remains correct. The two 5 V rails are not joined through ESP32; this tests simultaneous charging/programming, not playback. Disconnect PC USB before restoring the harness. |
 | U4: both USB cables, fully wired | NOT READY until the actual DevKit and K648 power paths are documented and an appropriate power-mux/reverse-blocking or verified data-only arrangement is implemented. Account for GPIO back-power and USB bridge power/detection too. Verify with protected/current-limited sources and dummy loads before using the PC. | No uncontrolled source-to-source current or powered-off peripheral back-feed in any permitted cable/switch state; all source-current limits respected. One series diode, a common ground, or an unspecified USB isolator does not establish this. |
 | U5: integrated transitions | U4 passed. Test charger-first and PC-first connection order, removal of each cable, reset and upload, first idle then during playback. Repeat five times and observe both rails, source currents and safe outputs. | Programming resets are expected: motor off and amp muted during reset. No stuck-on drive, unsafe transient or unintended USB powering of the player. Resume playback only through the normal tag/start sequence. |

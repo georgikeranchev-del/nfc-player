@@ -1,7 +1,7 @@
 #pragma once
 #include "interfaces.h"
 
-enum class PlayerState { BootSD, BootNfc, BootReady, Idle, MotorRamp, Playing, WaitRelease, Sleeping, Fault };
+enum class PlayerState { BootSD, BootNfc, BootReady, Idle, MotorRamp, Playing, BatteryWarning, WaitRelease, Sleeping, Fault };
 
 class Player {
 public:
@@ -20,8 +20,10 @@ private:
   void sleep(bool allowButtonWake = true);
   bool batteryLow(uint32_t now);
   void sleepForBattery(uint32_t now);
+  void checkPlaybackBattery(uint32_t now);
+  void playBatteryWarning(uint32_t now);
   void stopTrack(uint32_t now, LedMode mode);
-  void startTrack(uint32_t now);
+  void startTrack(uint32_t now, bool userRequest);
   void fail(const char *message, uint32_t now);
   IPower &Power;
   IMotor &Motor;
@@ -34,8 +36,10 @@ private:
   const char *error_ = "";
   uint32_t bootAt_ = 0, lastActivity_ = 0, buttonChanged_ = 0, pressedAt_ = 0;
   uint32_t lowBatteryAt_ = 0;
+  uint32_t softBatteryAt_ = 0, warningAt_ = 0;
   bool buttonRaw_ = false, buttonStable_ = false, buttonArmed_ = true;
   bool lowBatteryPending_ = false;
+  bool softBatteryPending_ = false;
   uint8_t volume_ = Config::INITIAL_VOLUME, plays_ = 0;
   char uid_[Config::UID_CAPACITY] = {};
   char path_[Config::TRACK_PATH_CAPACITY] = {};

@@ -12,11 +12,12 @@ void Player::begin(uint32_t now) {
   Leds.mode(LedMode::Off, now);
   if (!powerReady) { fail("Power monitoring initialization failed", now); return; }
   if (!Motor.begin()) { fail("Motor PWM initialization failed", now); return; }
-  if (Power.batteryMillivolts() < Config::BATTERY_START_MIN_MV ||
+  if (Power.batteryMillivolts() <= Config::BATTERY_LOW_MV ||
       Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV) {
     sleepForBattery(now);
     return;
   }
+  if (Power.batteryMillivolts() < Config::BATTERY_START_MIN_MV) Power.inhibitPlayback(true);
   state_ = PlayerState::BootSD;
 }
 
@@ -54,8 +55,44 @@ bool Player::batteryLow(uint32_t now) {
 
 void Player::sleepForBattery(uint32_t now) {
   error_ = "Battery voltage unsafe; check divider or recharge and power-cycle";
+  Power.inhibitPlayback(true);
   requestSleep(now);
   sleep(false);
+}
+
+void Player::checkPlaybackBattery(uint32_t now) {
+  if (Power.playbackInhibited()) return;
+  if (Power.batteryMillivolts() >= Config::BATTERY_START_MIN_MV) {
+    softBatteryPending_ = false;
+    return;
+  }
+  if (!softBatteryPending_) { softBatteryPending_ = true; softBatteryAt_ = now; }
+  if (now - softBatteryAt_ < Config::BATTERY_SOFT_HOLD_MS) return;
+  Power.inhibitPlayback(true);
+  softBatteryPending_ = false;
+  error_ = "Low battery; songs inhibited";
+  if (state_ == PlayerState::MotorRamp || state_ == PlayerState::Playing) {
+    stopTrack(now, LedMode::Off);
+    state_ = PlayerState::Idle;
+    lastActivity_ = now;
+  } else if (state_ == PlayerState::Idle) {
+    Leds.mode(LedMode::Off, now);
+  }
+}
+
+void Player::playBatteryWarning(uint32_t now) {
+  state_ = PlayerState::Idle;
+  lastActivity_ = now;
+  error_ = "Low battery; songs inhibited";
+  snprintf(path_, sizeof(path_), "%s/%s", Config::TRACK_DIRECTORY, Config::LOW_BATTERY_FILE);
+  if (!Storage.exists(path_)) { error_ = "Low battery; warning MP3 missing"; return; }
+  if (!Audio.play(path_, Config::LOW_BATTERY_VOLUME)) {
+    Audio.stop();
+    error_ = "Low battery; warning MP3 failed";
+    return;
+  }
+  warningAt_ = now;
+  state_ = PlayerState::BatteryWarning;
 }
 
 void Player::button(uint32_t now) {
@@ -76,8 +113,18 @@ void Player::button(uint32_t now) {
       now - pressedAt_ >= Config::BUTTON_HOLD_MS) requestSleep(now);
 }
 
-void Player::startTrack(uint32_t now) {
+void Player::startTrack(uint32_t now, bool userRequest) {
   stopTrack(now, LedMode::Off);
+  if (Power.playbackInhibited() || Power.batteryMillivolts() < Config::BATTERY_START_MIN_MV) {
+    Power.inhibitPlayback(true);
+    if (userRequest) playBatteryWarning(now);
+    else {
+      error_ = "Low battery; songs inhibited";
+      state_ = PlayerState::Idle;
+      lastActivity_ = now;
+    }
+    return;
+  }
   if (!Storage.exists(path_)) {
     error_ = "Track not found; remove and re-present tag after fixing SD";
     state_ = PlayerState::Idle;
@@ -94,6 +141,7 @@ void Player::tick(uint32_t now) {
   Power.tick(now);
   if (batteryLow(now)) { sleepForBattery(now); return; }
   if (state_ == PlayerState::Fault) return;
+  checkPlaybackBattery(now);
   button(now);
   if (state_ == PlayerState::WaitRelease || state_ == PlayerState::Sleeping) return;
   int8_t delta = Encoder.delta(now);
@@ -102,7 +150,7 @@ void Player::tick(uint32_t now) {
     if (target < Config::MIN_VOLUME) target = Config::MIN_VOLUME;
     if (target > Config::MAX_VOLUME) target = Config::MAX_VOLUME;
     volume_ = static_cast<uint8_t>(target);
-    Audio.volume(volume_);
+    if (state_ != PlayerState::BatteryWarning) Audio.volume(volume_);
     lastActivity_ = now;
   }
 
@@ -123,7 +171,7 @@ void Player::tick(uint32_t now) {
     case PlayerState::BootReady:
       if (elapsed >= Config::BOOT_READY_EARLIEST_MS) {
         if (!Audio.begin()) { fail("Audio initialization failed", now); return; }
-        Leds.mode(LedMode::Standby, now);
+        Leds.mode(Power.playbackInhibited() ? LedMode::Off : LedMode::Standby, now);
         state_ = PlayerState::Idle;
         lastActivity_ = now;
       }
@@ -139,13 +187,15 @@ void Player::tick(uint32_t now) {
       memcpy(uid_, tag.uid, sizeof(uid_));
       error_ = "";
       if (uid_[0] == '\0') {
-        stopTrack(now, LedMode::Stopping);
-        state_ = PlayerState::Idle;
+        if (state_ != PlayerState::BatteryWarning) {
+          stopTrack(now, Power.playbackInhibited() ? LedMode::Off : LedMode::Stopping);
+          state_ = PlayerState::Idle;
+        }
       } else {
         snprintf(path_, sizeof(path_), "%s/%s.mp3", Config::TRACK_DIRECTORY, uid_);
         plays_ = 0;
         Leds.selectPattern();
-        startTrack(now);
+        startTrack(now, true);
       }
     }
   }
@@ -166,8 +216,14 @@ void Player::tick(uint32_t now) {
   } else if (state_ == PlayerState::Playing) {
     lastActivity_ = now;
     if (!Audio.tick(now)) {
-      if (++plays_ < Config::MAX_PLAYS) startTrack(now);
+      if (++plays_ < Config::MAX_PLAYS) startTrack(now, false);
       else { stopTrack(now, LedMode::Standby); state_ = PlayerState::Idle; }
+    }
+  } else if (state_ == PlayerState::BatteryWarning) {
+    lastActivity_ = now;
+    if (now - warningAt_ >= Config::LOW_BATTERY_MAX_MS || !Audio.tick(now)) {
+      stopTrack(now, LedMode::Off);
+      state_ = PlayerState::Idle;
     }
   }
   Leds.tick(now);

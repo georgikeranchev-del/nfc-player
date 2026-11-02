@@ -6,6 +6,8 @@ public:
   bool begin() override;
   void tick(uint32_t now) override;
   uint32_t batteryMillivolts() const override { return batteryMillivolts_; }
+  bool playbackInhibited() const override;
+  void inhibitPlayback(bool inhibited) override;
   void sleep(bool allowButtonWake) override;
   static constexpr uint32_t batteryMillivoltsFromAdc(uint32_t adcMillivolts,
       uint32_t calibrationPermille = Config::BATTERY_CALIBRATION_PERMILLE) {

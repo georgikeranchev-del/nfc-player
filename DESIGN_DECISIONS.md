@@ -78,7 +78,9 @@ request is atomic; no `volatile`-as-synchronization pattern is used.
 
 PowerControl reads calibrated ADC millivolts through a 100k/47k divider on ADC1
 GPIO34; a 100 nF filter and 16-sample average reduce noise. Player handles startup
-voltage checks and sustained/critical low-voltage shutdown. Thresholds and meter
+voltage checks, soft song inhibition with a bounded warning MP3, and deeper
+low-voltage shutdown. Soft inhibition is retained across normal deep sleep;
+charging recovery is not inferred from voltage rebound or IP5310 OUT. Thresholds and meter
 calibration are in config.h; 3.6 V nominal is not a calibration reference or an
 accurate charge-percentage mapping. The decoder/SD/NFC calls can still block,
 so sampling is not a hard real-time safety mechanism. Failures leave loads

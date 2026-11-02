@@ -12,8 +12,9 @@ GND. EXT0 wakes/reset-starts the ESP32; `setup()` and all boot stages run again.
 This wake is allowed only after normal user/idle sleep.
 
 **Low-battery sleep:** button and timer wake are disabled. Open SW_LOAD, recharge,
-then switch on again. Charging alone does not wake the ESP32. Boot requires a
-calibrated reading of at least 3.50 V; a reading above 4.35 V is rejected too.
+then switch on again. Charging alone does not wake the ESP32. Hard low-battery
+startup refusal is at/below 3.30 V; a reading above 4.35 V is rejected too.
+Between 3.30 and 3.50 V, boot enters a song-inhibited mode that can play a warning.
 PCM recovery, if it tripped, follows the PCM maker's procedure, not GPIO/KEY taps.
 
 ## Boot stages
@@ -40,6 +41,13 @@ before relying on the thresholds; a missing/zero reading prevents startup.
 
 ## Tag-to-play sequence
 
+Before starting the motor, check the playback inhibit latch and the 3.50 V
+song-start threshold. A rejected user request plays `/player/low_battery.mp3`
+once, with motor/LEDs off, fixed volume 10 and a 10 s maximum duration. Removing
+the tag does not truncate the warning; a new tag or remove/re-present triggers
+a new request. An unchanged held tag does not loop it. Missing/failed warning
+audio stays inhibited. Hard low-battery sleep overrides any warning.
+
 For a tag detected at/after ready, call that instant T:
 
 | Time | Event |
@@ -55,6 +63,14 @@ scan latency is additional. Measure before promising a strict two-second start.
 No tag means idle: neither motor nor audio runs at boot. Removing the tag during
 the ramp cancels it; changing tag replaces it. Three plays are followed by idle,
 and re-presenting the tag is required to start again. Replays also ramp/fade.
+
+If voltage stays below 3.50 V for 5 s, the controller stops any song/ramp,
+turns LEDs off and latches song inhibition while leaving NFC available. Automatic
+song repeats do not trigger repeated warnings or bypass the battery check.
+The latch survives normal deep-sleep wake in RTC memory. Voltage rebound after
+removing the load is not proof of charging and does not clear it. A true power
+cycle re-evaluates startup voltage; automatic charger/recovery detection is not
+implemented yet. 3.50 V is a bench-tuning threshold, not a measured 5-10% SOC.
 
 ## Sleep sequence
 

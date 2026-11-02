@@ -9,6 +9,8 @@ struct IPower {
   virtual bool begin() = 0;
   virtual void tick(uint32_t now) = 0;
   virtual uint32_t batteryMillivolts() const = 0;
+  virtual bool playbackInhibited() const = 0;
+  virtual void inhibitPlayback(bool inhibited) = 0;
   virtual void sleep(bool allowButtonWake) = 0;
 };
 struct IPwm {

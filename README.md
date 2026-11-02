@@ -74,8 +74,18 @@ new long press. Brownout protection is NOT disabled.
 Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5310 is
 charger-only with its OUT unused. **Wire and calibrate the GPIO34 battery divider
 before running this firmware.** See [WIRING.md](WIRING.md#battery-voltage-divider).
-Boot requires at least 3.50 V; <=3.30 V for 2 s or <=3.00 V on a sample stops the
-loads and sleeps without button wake. Switch off, recharge and power-cycle.
+New songs require at least 3.50 V. Below that, a tag presentation plays
+`/player/low_battery.mp3` once at volume 10, with motor/LEDs off. Below 3.50 V
+for 5 s during a song stops playback and latches inhibition. Boot above 3.30 V
+but below 3.50 V initializes only for this warning/idle behavior, not songs.
+This voltage threshold is not a verified 5-10% capacity estimate. Provide the
+warning file on the SD card; it is not included in the repository. Missing or
+failed warning audio never permits the requested song to play.
+
+Startup at/below 3.30 V, <=3.30 V for 2 s while running, or <=3.00 V on a sample
+stops loads and sleeps without button wake. Switch off, recharge and power-cycle.
+Soft inhibition survives normal deep-sleep wake; voltage rebound alone does not
+clear it. Automatic charger recovery is pending a hardware decision, not enabled.
 Sleep does not isolate the battery, and the converter/peripherals still draw
 current. The PCM remains required. Startup volume is 10, selectable maximum 15,
 with the original full-scale gain reference of 21 retained.
@@ -86,7 +96,8 @@ The supplied tag UIDs and assigned songs are listed in the rendered
 ## No-tag idle and USB
 
 After successful initialization with no tag, motor PWM stays at zero and the
-amplifier stays in shutdown. The LED ring shows its dim standby animation, NFC
+amplifier stays in shutdown. The LED ring shows its dim standby animation (off
+when low-battery-inhibited), NFC
 polling continues, and battery voltage is sampled every 250 ms while awake.
 This is lower-load operation, not zero current or disconnected peripheral power.
 After five minutes without activity, the firmware enters normal button-wake sleep.

@@ -13,11 +13,14 @@ void require(bool condition, const char *message) {
 }
 struct FakePower : IPower {
   bool ok = true, slept = false, buttonWake = true;
+  bool inhibited = false;
   uint32_t ticks = 0;
   uint32_t millivolts = 3800;
   bool begin() override { return ok; }
   void tick(uint32_t) override { ++ticks; }
   uint32_t batteryMillivolts() const override { return millivolts; }
+  bool playbackInhibited() const override { return inhibited; }
+  void inhibitPlayback(bool value) override { inhibited = value; }
   void sleep(bool allowButtonWake) override { slept = true; buttonWake = allowButtonWake; }
 };
 struct FakePwm : IPwm {
@@ -39,8 +42,12 @@ struct FakeAudio : IAudio {
   bool ok = true, playOK = true, active = false, continues = true;
   int initialized = 0, starts = 0;
   uint8_t level = 0;
+  char path[Config::TRACK_PATH_CAPACITY] = {};
   bool begin() override { ++initialized; return ok; }
-  bool play(const char *, uint8_t value) override { level = value; ++starts; active = playOK; return playOK; }
+  bool play(const char *value, uint8_t volume) override {
+    std::strncpy(path, value, sizeof(path) - 1);
+    level = volume; ++starts; active = playOK; return playOK;
+  }
   bool tick(uint32_t) override { return continues; }
   void volume(uint8_t value) override { level = value; }
   void stop() override { active = false; }
@@ -194,7 +201,7 @@ int main() {
     }
     {
       const uint32_t unsafeVoltages[] = {0, Config::BATTERY_CRITICAL_MV, Config::BATTERY_LOW_MV,
-        Config::BATTERY_START_MIN_MV - 1, Config::BATTERY_MAX_VALID_MV + 1};
+        Config::BATTERY_MAX_VALID_MV + 1};
       for (uint32_t voltage : unsafeVoltages) {
         Rig rig; rig.power.millivolts = voltage; rig.encoder.held = true; rig.boot();
         require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && !rig.power.buttonWake,
@@ -224,6 +231,72 @@ int main() {
       rig.power.millivolts = 4200; rig.tag("B2");
       require(rig.player.state() == PlayerState::Sleeping && rig.audio.starts == 1,
         "voltage rebound cannot restart playback");
+    }
+    {
+      Rig rig; rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.boot();
+      require(rig.player.state() == PlayerState::Idle && rig.power.inhibited && !rig.nfc.stopped,
+        "soft-low startup keeps NFC available but inhibits songs");
+      require(rig.leds.current == LedMode::Off && rig.audio.starts == 0, "soft-low startup is quiet and dark");
+      rig.tag("A1");
+      require(rig.player.state() == PlayerState::BatteryWarning && rig.pwm.duty == 0,
+        "low-battery presentation plays warning without motor");
+      require(std::strcmp(rig.audio.path, "/player/low_battery.mp3") == 0 &&
+        rig.audio.level == Config::LOW_BATTERY_VOLUME, "dedicated MP3 and bounded warning volume");
+      for (int turn = 0; turn < 30; ++turn) { rig.encoder.turn = 1; rig.step(); }
+      require(rig.audio.level == Config::LOW_BATTERY_VOLUME, "encoder cannot increase warning volume");
+      rig.tag("");
+      require(rig.player.state() == PlayerState::BatteryWarning && rig.audio.active,
+        "removing the tag does not truncate warning");
+      rig.audio.continues = false; rig.step();
+      require(rig.player.state() == PlayerState::Idle && rig.audio.starts == 1 && rig.player.completedPlays() == 0,
+        "warning finishes once without song repeats");
+      rig.audio.continues = true; rig.tag("A1");
+      require(rig.audio.starts == 2, "re-presenting same tag produces one more warning");
+      rig.step(Config::LOW_BATTERY_MAX_MS);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active && rig.audio.starts == 2,
+        "warning has a maximum duration and cannot loop");
+      rig.step();
+      require(rig.audio.starts == 2, "held tag does not repeatedly trigger warning");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.step();
+      rig.step(Config::BATTERY_SOFT_HOLD_MS - 1);
+      require(rig.audio.active && !rig.power.inhibited, "short soft-low dip does not interrupt current song");
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV; rig.step();
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.step();
+      rig.step(Config::BATTERY_SOFT_HOLD_MS);
+      require(rig.power.inhibited && !rig.power.slept && rig.pwm.duty == 0 && !rig.audio.active && !rig.nfc.stopped,
+        "sustained soft-low voltage stops song but keeps NFC awake");
+      rig.power.millivolts = 3700; rig.step(); rig.tag("B2");
+      require(rig.player.state() == PlayerState::BatteryWarning && rig.pwm.duty == 0,
+        "immediate unloaded voltage rebound cannot clear song inhibition");
+      rig.power.millivolts = Config::BATTERY_CRITICAL_MV; rig.step();
+      require(rig.power.slept && !rig.audio.active && !rig.power.buttonWake,
+        "critical voltage preempts the warning MP3");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.audio.continues = false; rig.step();
+      require(rig.power.inhibited && rig.player.state() == PlayerState::Idle && rig.audio.starts == 1,
+        "automatic song repeat cannot bypass inhibition or trigger warning loop");
+    }
+    {
+      Rig rig; rig.power.inhibited = true; rig.boot();
+      require(rig.power.inhibited && !rig.power.slept, "soft inhibition survives normal sleep wake despite voltage rebound");
+      rig.storage.found = false; rig.tag("A1");
+      require(rig.player.state() == PlayerState::Idle && rig.pwm.duty == 0 && rig.audio.starts == 0,
+        "missing warning MP3 never falls through to song playback");
+      require(std::strstr(rig.player.error(), "missing") != nullptr, "missing warning is reported");
+      rig.storage.found = true; rig.audio.playOK = false; rig.tag("B2");
+      require(rig.player.state() == PlayerState::Idle && rig.pwm.duty == 0 && !rig.audio.active,
+        "failed warning MP3 remains fail-closed");
+    }
+    {
+      Rig rig; rig.boot(UINT32_MAX - 1000);
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.step(); rig.step(Config::BATTERY_SOFT_HOLD_MS);
+      require(rig.power.inhibited && !rig.power.slept, "soft-inhibit timer survives rollover");
+      require(rig.leds.current == LedMode::Off, "soft inhibition also darkens an idle player");
     }
     {
       const uint32_t unsafeVoltages[] = {0, Config::BATTERY_CRITICAL_MV, Config::BATTERY_MAX_VALID_MV + 1};

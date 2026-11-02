@@ -29,6 +29,10 @@ constexpr uint32_t BATTERY_LOW_MV = 3300;
 constexpr uint32_t BATTERY_CRITICAL_MV = 3000;
 constexpr uint32_t BATTERY_MAX_VALID_MV = 4350;
 constexpr uint32_t BATTERY_LOW_HOLD_MS = 2000;
+constexpr uint32_t BATTERY_SOFT_HOLD_MS = 5000;
+constexpr char LOW_BATTERY_FILE[] = "low_battery.mp3";
+constexpr uint8_t LOW_BATTERY_VOLUME = 10;
+constexpr uint32_t LOW_BATTERY_MAX_MS = 10000;
 
 constexpr uint8_t MOTOR_PWM_CHANNEL = 0;
 constexpr uint32_t MOTOR_PWM_HZ = 20000;
@@ -74,6 +78,9 @@ static_assert(BATTERY_CRITICAL_MV > 0 && BATTERY_CRITICAL_MV < BATTERY_LOW_MV &&
 static_assert(BATTERY_ADC_SAMPLES > 0 && BATTERY_SAMPLE_MS > 0 &&
               BATTERY_LOW_HOLD_MS >= BATTERY_SAMPLE_MS && BATTERY_LOG_MS >= BATTERY_SAMPLE_MS,
               "Invalid battery sampling/timing");
+static_assert(BATTERY_SOFT_HOLD_MS >= BATTERY_SAMPLE_MS && LOW_BATTERY_MAX_MS > AUDIO_FADE_MS &&
+              LOW_BATTERY_VOLUME > 0 && LOW_BATTERY_VOLUME <= MAX_VOLUME,
+              "Invalid low-battery warning settings");
 static_assert(MIN_VOLUME <= INITIAL_VOLUME && INITIAL_VOLUME <= MAX_VOLUME && MAX_VOLUME > 0,
               "Invalid volume settings");
 static_assert(MAX_VOLUME <= VOLUME_SCALE && VOLUME_SCALE > 0,
