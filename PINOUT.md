@@ -5,6 +5,7 @@ GPIO numbers are ESP32 signal names, NOT physical header positions; clone-board
 layouts vary. Classic ESP32/WROOM without PSRAM remains the working assumption,
 not a verified module identity. GPIO16 must be available, not used by PSRAM.
 GPIO17 is now unused; remove the previous IP5310 KEY-driver connection.
+GPIO17 is the only free output-capable pin; GPIO36 is the other free input-only pin.
 
 The symbol, GPIO and component columns are checked against
 [firmware/nfc_player/pins.h](firmware/nfc_player/pins.h) and
@@ -33,6 +34,8 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | ENCODER_CLK | 32 | ENC1 | Green | Encoder A/CLK; common to GND. |
 | ENCODER_DT | 33 | ENC1 | Green | Encoder B/DT; common to GND. |
 | BATTERY_ADC | 34 | R_BAT_TOP | Green | ADC1_CH6; 100k from SW_BAT+ to ADC node; 47k and 100nF from node to LOAD_GND. Input only; no internal pull resistors. About 1.343V at a 4.20V pack. |
+| CHARGER_PRESENT | 35 | Q_VBUS | Green | 2N7000 drain with 100k pull-up to ESP32 3V3 only; LOW means IP5310 USB VBUS is present. Gate: VBUS through 10k, 100k gate-to-GND; source to LOAD_GND. Take VBUS from the IP5310 USB input, not OUT+. Input only, RTC wake capable, no internal pull. Never connect VBUS directly to a GPIO. |
+| HELP_BUTTON | 39 | SW_HELP | Green | Existing momentary NO button between GPIO39 and LOAD_GND, with an external 10k pull-up to ESP32 3V3; LOW means pressed. Input only, no internal pull. A short press while idle plays /player/help.mp3. Disconnect the button from IP5310 KEY, which can sit above 3.3 V. |
 <!-- PINOUT:END -->
 
 ## Signal wire color key

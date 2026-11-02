@@ -281,8 +281,13 @@ Removing the tag during a warning must not truncate it. Verify the 10 s timeout,
 missing/corrupt warning behavior, and that hard cutoff preempts the warning.
 Start a song at a healthy voltage, then hold below 3.50 V for 5 s: playback must
 stop but NFC remain active. Brief dips should not stop an already playing song.
-Confirm rebound and normal sleep/wake do not clear inhibition. Automatic charging
-recovery remains unimplemented; do not record charger detection as a passed test.
+Confirm rebound and normal sleep/wake do not clear inhibition. Charger recovery:
+with the player inhibited, a rebound alone must not clear it; plugging the charger
+and holding >=3.70 V for 30 s must, and unplugging or dropping below 3.70 V
+restarts that timer. Check GPIO35 reads LOW with USB present and HIGH without it,
+and that hard low-battery sleep wakes on plug-in (and polls every 30 s if USB is
+already present). Measure VBUS at the gate (about 4.5 V) and confirm no signal
+reaches the GPIO other than 3.3 V logic.
 
 ## Choosing the motor ramp duration
 
@@ -322,6 +327,7 @@ and NFC delays. A 2 s motor ramp therefore cannot meet a 2 s total startup targe
 | B7 | Test 1.5 s hold/release sleep and 5-minute idle sleep. Observe rails/current for at least 60 s, then wake by encoder with a healthy pack. | Motor/amp off, LEDs black; normal encoder wake works while powered. Measure remaining draw; do not assume TPS61088 turns off. SW_LOAD must remove boost and divider input together. |
 | B8 | Perform the battery ADC calibration and cutoff procedure above with a substitute supply, not by over-discharging cells. | Verified voltage accuracy, startup refusal, dip filtering, shutdown and no button wake in low-battery sleep. Record residual current and switch off afterward. |
 | B9 | Perform the soft inhibition/warning test above. | One bounded warning per new request; no motor, song replay or voltage-rebound unlock. Missing warning remains fail-closed. |
+| B10 | Move the existing button from IP5310 KEY to GPIO39 and LOAD_GND with a 10k pull-up to 3V3, remove the transistor circuit from GPIO17, and put `/player/help.mp3` on the SD card. Press while idle, during help, during a song, with a tag present, and with the file removed. Hold it while powering on. | Help plays at the set volume with the motor off; a second press stops it; a tag stops it and starts that song; presses during songs do nothing; a missing file only logs; a button held at power-on does nothing until released. Check GPIO39 reads HIGH idle and LOW pressed, and that there is no 5 V on it. |
 
 For B3/B4 only, set `INITIAL_VOLUME = 0`, `LED_BRIGHTNESS = 0` AND
 `LED_START_BRIGHTNESS = 0` in the test image. Both LED values must be zero to pass

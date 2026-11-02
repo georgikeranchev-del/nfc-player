@@ -8,7 +8,8 @@ public:
   uint32_t batteryMillivolts() const override { return batteryMillivolts_; }
   bool playbackInhibited() const override;
   void inhibitPlayback(bool inhibited) override;
-  void sleep(bool allowButtonWake) override;
+  bool chargerPresent() const override { return chargerPresent_; }
+  void sleep(bool allowButtonWake, bool allowChargerWake) override;
   static constexpr uint32_t batteryMillivoltsFromAdc(uint32_t adcMillivolts,
       uint32_t calibrationPermille = Config::BATTERY_CALIBRATION_PERMILLE) {
     return static_cast<uint32_t>((static_cast<uint64_t>(adcMillivolts) *
@@ -17,8 +18,9 @@ public:
       (static_cast<uint64_t>(Config::BATTERY_DIVIDER_BOTTOM_OHMS) * 1000));
   }
 private:
-  void sampleBattery();
+  void sampleInputs();
   void logBattery() const;
   uint32_t sampledAt_ = 0, loggedAt_ = 0;
   uint32_t adcMillivolts_ = 0, batteryMillivolts_ = 0;
+  bool chargerPresent_ = false;
 };

@@ -195,7 +195,8 @@ Conservative initial settings are 3.50 V minimum for a new song and soft song
 inhibition after 5 s below it. A tag request while inhibited plays
 `/player/low_battery.mp3` once at volume 10 with motor/LEDs off; the warning is
 limited to 10 s. Normal sleep/wake preserves this latch; rebound alone cannot
-clear it. Automatic charging recovery has not been implemented. A true power
+clear it. Songs re-enable only with USB present and at least 3.70 V for 30 s
+(see [charger-present sense](#charger-present-sense)). A true power
 cycle checks startup voltage again. Neither this threshold nor the divider can
 establish that exactly 5-10% capacity remains; calibrate voltage with a meter,
 then characterize the pack under the real load before choosing an SOC estimate.
@@ -214,6 +215,25 @@ Do not store it in this state. Keep the PCM as independent protection. A proper
 hardware low-voltage disconnect is needed for unattended automatic isolation;
 do not assume the JXL board's UVLO or EN provides that without its schematic and
 measurements. A heatsink or quieter audio cannot correct over-discharge.
+
+### Charger-present sense
+
+```text
+IP5310 USB-C VBUS pad --10k-- +-- 2N7000 gate (G)
+                              |
+                              100k to LOAD_GND
+
+ESP32 3V3 --100k-- +-- 2N7000 drain (D) -- GPIO35 (input only)
+2N7000 source (S) -- LOAD_GND
+```
+
+Take VBUS from the IP5310 module's USB input (connector VBUS pin or input pad),
+not OUT+, which can also be battery-powered. That module's ground is the protected
+P-/LOAD_GND. USB present puts about 4.5 V on the gate and GPIO35 reads LOW. This
+only senses USB power: it does not switch any load, and it does not prove the
+cell is actually charging. The pull-up goes to ESP32 3V3 only, never 5 V. TO-92
+2N7000 pin order varies by maker; check the datasheet or the flat face. GPIO35 is
+input only with no internal pull and supports deep-sleep wake; GPIO17 does not.
 
 ### Fuse and PCM during startup
 
@@ -530,11 +550,31 @@ Encoder A/CLK -> GPIO32; B/DT -> GPIO33; common -> GND
 Encoder breakout VCC -> 3V3 only, if the module needs it
 ```
 
-Disconnect the old GPIO17-to-KEY transistor circuit; GPIO17 is now unused.
+Disconnect the old GPIO17-to-KEY transistor circuit (at least its 1k base resistor);
+GPIO17 is now unused and is the only free output-capable pin.
 Firmware no longer configures that pin, creates a KEY timer or issues taps.
 Do not join KEY to GPIO4. The charger's onboard button may remain, but it does
 not control the TPS61088 path or wake an unpowered player. Normal sleep wakes
 with the encoder; low-battery lockout requires recharge and a power cycle.
+
+### Help button
+
+```text
+ESP32 3V3 --10k-- +-- GPIO39 (input only)
+                  |
+existing NO button --- LOAD_GND
+```
+
+Reuse the existing momentary button, but move it from the IP5310 KEY pad: one
+lead to GPIO39 and the other to LOAD_GND, with a 10k pull-up to ESP32 3V3.
+IP5310 KEY can sit above 3.3 V, so it must never share a node with the GPIO.
+GPIO39 has no internal pull-up, so the resistor is required. GPIO36 is the other
+free input-only pin. A spare 100 nF ceramic from GPIO39 to GND is optional;
+Espressif documents glitches on GPIO36/39 in some ADC and sleep cases, and the
+40 ms software debounce covers them. This button cannot wake deep sleep.
+
+If the transistor circuit stays on GPIO17 as it was, do not enable that pin as
+an input with a pull-up: the 1k and 10k would hold the base partly on.
 
 ## SD, PN532 and decoupling
 

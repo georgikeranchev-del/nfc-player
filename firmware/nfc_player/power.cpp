@@ -25,16 +25,18 @@ bool PowerControl::begin() {
                 static_cast<int>(esp_reset_reason()), static_cast<int>(esp_sleep_get_wakeup_cause()));
   if (esp_reset_reason() != ESP_RST_DEEPSLEEP) ::playbackInhibited = false;
   pinMode(Pins::BATTERY_ADC, INPUT);
+  pinMode(Pins::CHARGER_PRESENT, INPUT);
   analogReadResolution(12);
   analogSetPinAttenuation(Pins::BATTERY_ADC, ADC_6db);
   delay(20);
-  sampleBattery();
+  sampleInputs();
   sampledAt_ = loggedAt_ = millis();
   logBattery();
   return true;
 }
 
-void PowerControl::sampleBattery() {
+void PowerControl::sampleInputs() {
+  chargerPresent_ = digitalRead(Pins::CHARGER_PRESENT) == LOW;
   uint32_t total = 0;
   for (uint8_t sample = 0; sample < Config::BATTERY_ADC_SAMPLES; ++sample) {
     total += analogReadMilliVolts(Pins::BATTERY_ADC);
@@ -44,8 +46,9 @@ void PowerControl::sampleBattery() {
 }
 
 void PowerControl::logBattery() const {
-  Serial.printf("Battery ADC: %lu mV; pack: %lu mV\n",
-                static_cast<unsigned long>(adcMillivolts_), static_cast<unsigned long>(batteryMillivolts_));
+  Serial.printf("Battery ADC: %lu mV; pack: %lu mV; charger: %s\n",
+                static_cast<unsigned long>(adcMillivolts_), static_cast<unsigned long>(batteryMillivolts_),
+                chargerPresent_ ? "present" : "absent");
 }
 
 bool PowerControl::playbackInhibited() const { return ::playbackInhibited; }
@@ -59,7 +62,7 @@ void PowerControl::inhibitPlayback(bool inhibited) {
 void PowerControl::tick(uint32_t now) {
   if (now - sampledAt_ >= Config::BATTERY_SAMPLE_MS) {
     sampledAt_ = now;
-    sampleBattery();
+    sampleInputs();
   }
   if (now - loggedAt_ >= Config::BATTERY_LOG_MS) {
     loggedAt_ = now;
@@ -67,7 +70,7 @@ void PowerControl::tick(uint32_t now) {
   }
 }
 
-void PowerControl::sleep(bool allowButtonWake) {
+void PowerControl::sleep(bool allowButtonWake, bool allowChargerWake) {
   digitalWrite(Pins::AMP_ENABLE, LOW);
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   if (allowButtonWake) {
@@ -77,6 +80,15 @@ void PowerControl::sleep(bool allowButtonWake) {
       Serial.println("Wake-source configuration failed; restart required");
       return;
     }
+  } else if (allowChargerWake) {
+    // Level-triggered ext0 would re-wake at once while USB stays present, so poll by timer then.
+    if (chargerPresent_) {
+      esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(Config::CHARGER_WAKE_POLL_MS) * 1000ULL);
+    } else if (esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(Pins::CHARGER_PRESENT), LOW) != ESP_OK) {
+      Serial.println("Charger wake configuration failed; restart required");
+      return;
+    }
+    Serial.println("Battery voltage unsafe; button wake disabled; waking for charger.");
   } else {
     Serial.println("Battery voltage unsafe; recharge and power-cycle. Button wake disabled.");
   }

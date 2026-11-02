@@ -71,6 +71,14 @@ three plays, 600 ms motor ramp, 1 s audio fade, 5-minute idle sleep, 1.5 s encod
 hold then release to sleep. A held wake button must first be released to arm a
 new long press. Brownout protection is NOT disabled.
 
+A short press of the help button (GPIO39) while idle plays `/player/help.mp3`
+at the current volume, for at most 2 minutes, with the motor off. Press again to
+stop it; the encoder adjusts its volume; presenting a tag stops it and starts
+that song. It is ignored during songs, warnings and sleep. Below the song-start
+voltage it plays the low-battery warning instead. Supply the file yourself; a
+missing file is reported on serial and plays nothing. See
+[WIRING.md](WIRING.md#help-button).
+
 Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5310 is
 charger-only with its OUT unused. **Wire and calibrate the GPIO34 battery divider
 before running this firmware.** See [WIRING.md](WIRING.md#battery-voltage-divider).
@@ -85,7 +93,10 @@ failed warning audio never permits the requested song to play.
 Startup at/below 3.30 V, <=3.30 V for 2 s while running, or <=3.00 V on a sample
 stops loads and sleeps without button wake. Switch off, recharge and power-cycle.
 Soft inhibition survives normal deep-sleep wake; voltage rebound alone does not
-clear it. Automatic charger recovery is pending a hardware decision, not enabled.
+clear it. Songs are re-enabled only when the 2N7000 sense (GPIO35) reports IP5310
+USB VBUS present and the pack reads at least 3.70 V for 30 s. Hard low-battery
+sleep then wakes on charger insertion, or polls every 30 s while it stays plugged
+in. Unverified until bench-tested; see [WIRING.md](WIRING.md#charger-present-sense).
 Sleep does not isolate the battery, and the converter/peripherals still draw
 current. The PCM remains required. Startup volume is 10, selectable maximum 15,
 with the original full-scale gain reference of 21 retained.

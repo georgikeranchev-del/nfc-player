@@ -69,8 +69,8 @@ turns LEDs off and latches song inhibition while leaving NFC available. Automati
 song repeats do not trigger repeated warnings or bypass the battery check.
 The latch survives normal deep-sleep wake in RTC memory. Voltage rebound after
 removing the load is not proof of charging and does not clear it. A true power
-cycle re-evaluates startup voltage; automatic charger/recovery detection is not
-implemented yet. 3.50 V is a bench-tuning threshold, not a measured 5-10% SOC.
+cycle re-evaluates startup voltage. With the charger sense (GPIO35 LOW), 3.70 V
+or more for 30 s clears the latch; a rebound without USB never does. 3.50 V is a bench-tuning threshold, not a measured 5-10% SOC.
 
 ## Sleep sequence
 

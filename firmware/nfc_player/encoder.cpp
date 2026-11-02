@@ -8,10 +8,14 @@ void EncoderInput::begin() {
   pinMode(Pins::ENCODER_CLK, INPUT_PULLUP);
   pinMode(Pins::ENCODER_DT, INPUT_PULLUP);
   pinMode(Pins::ENCODER_SW, INPUT_PULLUP);
+  pinMode(Pins::HELP_BUTTON, INPUT);
   lastClock_ = digitalRead(Pins::ENCODER_CLK);
 }
 
 bool EncoderInput::pressed() const { return digitalRead(Pins::ENCODER_SW) == LOW; }
+
+// GPIO39 is input only with no internal pull; the 10k pull-up is external.
+bool EncoderInput::helpPressed() const { return digitalRead(Pins::HELP_BUTTON) == LOW; }
 
 int8_t EncoderInput::delta(uint32_t now) {
   int clock = digitalRead(Pins::ENCODER_CLK);

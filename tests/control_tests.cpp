@@ -12,7 +12,7 @@ void require(bool condition, const char *message) {
   if (!condition) { std::printf("FAIL: %s\n", message); throw 1; }
 }
 struct FakePower : IPower {
-  bool ok = true, slept = false, buttonWake = true;
+  bool ok = true, slept = false, buttonWake = true, chargerWake = false, charger = false;
   bool inhibited = false;
   uint32_t ticks = 0;
   uint32_t millivolts = 3800;
@@ -21,7 +21,10 @@ struct FakePower : IPower {
   uint32_t batteryMillivolts() const override { return millivolts; }
   bool playbackInhibited() const override { return inhibited; }
   void inhibitPlayback(bool value) override { inhibited = value; }
-  void sleep(bool allowButtonWake) override { slept = true; buttonWake = allowButtonWake; }
+  bool chargerPresent() const override { return charger; }
+  void sleep(bool allowButtonWake, bool allowChargerWake) override {
+    slept = true; buttonWake = allowButtonWake; chargerWake = allowChargerWake;
+  }
 };
 struct FakePwm : IPwm {
   bool ok = true;
@@ -74,10 +77,11 @@ struct FakeStorage : IStorage {
   }
 };
 struct FakeEncoder : IEncoder {
-  bool held = false;
+  bool held = false, help = false;
   int8_t turn = 0;
   void begin() override {}
   bool pressed() const override { return held; }
+  bool helpPressed() const override { return help; }
   int8_t delta(uint32_t) override { int8_t value = turn; turn = 0; return value; }
 };
 struct Rig {
@@ -99,6 +103,7 @@ struct Rig {
     step(Config::BOOT_READY_EARLIEST_MS - Config::BOOT_NFC_EARLIEST_MS);
   }
   void tag(const char *value) { nfc.put(value); step(); }
+  void press(bool down) { encoder.help = down; step(); step(Config::BUTTON_DEBOUNCE_MS); }
 };
 
 int main() {
@@ -143,7 +148,8 @@ int main() {
       require(rig.audio.starts == Config::MAX_PLAYS && rig.player.completedPlays() == Config::MAX_PLAYS, "three plays");
       require(rig.player.state() == PlayerState::Idle && rig.pwm.duty == 0, "stop after repeats");
       rig.step(Config::IDLE_SLEEP_MS);
-      require(rig.power.slept && rig.power.buttonWake && rig.nfc.stopped, "idle sleep allows button wake and stops NFC");
+      require(rig.power.slept && rig.power.buttonWake && !rig.power.chargerWake && rig.nfc.stopped,
+        "idle sleep allows only button wake and stops NFC");
     }
           {
             Rig rig; rig.boot();
@@ -206,6 +212,7 @@ int main() {
         Rig rig; rig.power.millivolts = voltage; rig.encoder.held = true; rig.boot();
         require(rig.player.state() == PlayerState::Sleeping && rig.power.slept && !rig.power.buttonWake,
           "unsafe startup voltage sleeps without button wake even if held");
+        require(rig.power.chargerWake, "unsafe startup voltage can wake for a charger");
         require(rig.storage.initialized == 0 && rig.nfc.initialized == 0 && rig.audio.initialized == 0,
           "unsafe startup voltage blocks peripheral initialization");
         require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off,
@@ -293,6 +300,30 @@ int main() {
         "failed warning MP3 remains fail-closed");
     }
     {
+      Rig rig; rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.boot();
+      rig.power.millivolts = Config::BATTERY_RECOVER_MV; rig.step(Config::BATTERY_RECOVER_HOLD_MS);
+      require(rig.power.inhibited, "voltage rebound without a charger cannot recover");
+      rig.power.charger = true; rig.step(); rig.step(Config::BATTERY_RECOVER_HOLD_MS - 1);
+      require(rig.power.inhibited, "recovery waits for the full hold time");
+      rig.power.millivolts = Config::BATTERY_RECOVER_MV - 1; rig.step();
+      rig.power.millivolts = Config::BATTERY_RECOVER_MV; rig.step(); rig.step(Config::BATTERY_RECOVER_HOLD_MS - 1);
+      require(rig.power.inhibited, "interrupted charger hold restarts");
+      rig.step();
+      require(!rig.power.inhibited && rig.leds.current == LedMode::Standby && !rig.power.slept,
+        "charger plus sustained voltage clears song inhibition");
+      rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.audio.starts == 1 && std::strcmp(rig.audio.path, "/player/A1.mp3") == 0,
+        "songs play again after recovery");
+    }
+    {
+      Rig rig; rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.power.charger = true; rig.boot();
+      rig.step(Config::BATTERY_RECOVER_HOLD_MS);
+      require(rig.power.inhibited, "charger alone without voltage recovery stays inhibited");
+      rig.power.millivolts = Config::BATTERY_RECOVER_MV; rig.step(); rig.power.charger = false;
+      rig.step(Config::BATTERY_RECOVER_HOLD_MS);
+      require(rig.power.inhibited, "unplugging the charger cancels recovery");
+    }
+    {
       Rig rig; rig.boot(UINT32_MAX - 1000);
       rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.step(); rig.step(Config::BATTERY_SOFT_HOLD_MS);
       require(rig.power.inhibited && !rig.power.slept, "soft-inhibit timer survives rollover");
@@ -317,6 +348,73 @@ int main() {
       Rig rig; rig.boot(UINT32_MAX - 1000);
       rig.power.millivolts = Config::BATTERY_LOW_MV; rig.step(); rig.step(Config::BATTERY_LOW_HOLD_MS);
       require(rig.power.slept && !rig.power.buttonWake, "low-voltage timer survives rollover");
+    }
+    {
+      Rig rig; rig.boot(); rig.press(true);
+      require(rig.player.state() == PlayerState::Help && rig.audio.starts == 1 && rig.pwm.duty == 0,
+        "help press plays help without the motor");
+      require(std::strcmp(rig.audio.path, "/player/help.mp3") == 0 && rig.audio.level == rig.player.volume(),
+        "help uses help.mp3 at the selected volume");
+      rig.encoder.turn = 1; rig.step();
+      require(rig.audio.level == rig.player.volume(), "encoder adjusts help volume");
+      rig.press(false); rig.press(true);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active && rig.leds.current == LedMode::Standby,
+        "second press stops help");
+      rig.press(false); rig.press(true);
+      rig.audio.continues = false; rig.step();
+      require(rig.player.state() == PlayerState::Idle && rig.audio.starts == 2 && rig.leds.current == LedMode::Standby,
+        "help ends when the file finishes");
+    }
+    {
+      Rig rig; rig.boot(); rig.press(true);
+      rig.step(Config::HELP_MAX_MS);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active, "help has a maximum duration");
+    }
+    {
+      Rig rig; rig.boot(); rig.press(true);
+      rig.tag("A1");
+      require(rig.player.state() == PlayerState::MotorRamp && !rig.audio.active, "a tag interrupts help");
+      rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Playing && std::strcmp(rig.audio.path, "/player/A1.mp3") == 0,
+        "song plays after help interruption");
+      rig.press(false); rig.press(true);
+      require(rig.player.state() == PlayerState::Playing && rig.audio.starts == 2, "help is ignored during a song");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.tag(""); rig.press(true);
+      rig.tag("");
+      require(rig.player.state() == PlayerState::Help, "tag removal does not stop help");
+    }
+    {
+      Rig rig; rig.encoder.help = true; rig.boot(); rig.step(Config::BUTTON_DEBOUNCE_MS);
+      require(rig.player.state() == PlayerState::Idle && rig.audio.starts == 0, "button held at boot does not play help");
+      rig.press(false); rig.press(true);
+      require(rig.player.state() == PlayerState::Help, "help works after the boot-time press is released");
+    }
+    {
+      Rig rig; rig.boot(); rig.encoder.help = true; rig.step(); rig.encoder.help = false; rig.step(Config::BUTTON_DEBOUNCE_MS);
+      require(rig.audio.starts == 0 && rig.player.state() == PlayerState::Idle, "contact bounce shorter than debounce is ignored");
+      rig.storage.found = false; rig.press(true);
+      require(rig.player.state() == PlayerState::Idle && rig.audio.starts == 0 &&
+        std::strstr(rig.player.error(), "Help") != nullptr, "missing help file is reported and fails closed");
+      rig.storage.found = true; rig.audio.playOK = false; rig.press(false); rig.press(true);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active, "failed help audio fails closed");
+    }
+    {
+      Rig rig; rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.boot(); rig.press(true);
+      require(rig.player.state() == PlayerState::BatteryWarning &&
+        std::strcmp(rig.audio.path, "/player/low_battery.mp3") == 0, "low battery plays the warning instead of help");
+    }
+    {
+      Rig rig; rig.boot(); rig.press(true);
+      rig.power.millivolts = Config::BATTERY_START_MIN_MV - 1; rig.step(); rig.step(Config::BATTERY_SOFT_HOLD_MS);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active && rig.power.inhibited,
+        "sustained low voltage stops help");
+    }
+    {
+      Rig rig; rig.boot(UINT32_MAX - 300); rig.press(true);
+      rig.step(Config::HELP_MAX_MS);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active, "help timer survives rollover");
     }
     for (int failure = 0; failure < 5; ++failure) {
       Rig rig;

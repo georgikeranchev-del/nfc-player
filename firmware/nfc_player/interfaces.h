@@ -11,7 +11,8 @@ struct IPower {
   virtual uint32_t batteryMillivolts() const = 0;
   virtual bool playbackInhibited() const = 0;
   virtual void inhibitPlayback(bool inhibited) = 0;
-  virtual void sleep(bool allowButtonWake) = 0;
+  virtual bool chargerPresent() const = 0;
+  virtual void sleep(bool allowButtonWake, bool allowChargerWake) = 0;
 };
 struct IPwm {
   virtual ~IPwm() = default;
@@ -56,5 +57,6 @@ struct IEncoder {
   virtual ~IEncoder() = default;
   virtual void begin() = 0;
   virtual bool pressed() const = 0;
+  virtual bool helpPressed() const = 0;
   virtual int8_t delta(uint32_t now) = 0;
 };

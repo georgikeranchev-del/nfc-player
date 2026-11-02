@@ -21,11 +21,13 @@ constexpr uint8_t ENCODER_SW = 4;
 constexpr uint8_t LED_DATA = 21;
 constexpr uint8_t AMP_ENABLE = 2;
 constexpr uint8_t BATTERY_ADC = 34;
+constexpr uint8_t CHARGER_PRESENT = 35;
+constexpr uint8_t HELP_BUTTON = 39;
 
 constexpr uint8_t All[] = {
   SD_CS, SD_SCK, SD_MISO, SD_MOSI, PN532_SS, PN532_SCK, PN532_MISO,
   PN532_MOSI, MOTOR_GATE, I2S_LRC, I2S_BCLK, I2S_DOUT, ENCODER_CLK,
-  ENCODER_DT, ENCODER_SW, LED_DATA, AMP_ENABLE, BATTERY_ADC
+  ENCODER_DT, ENCODER_SW, LED_DATA, AMP_ENABLE, BATTERY_ADC, CHARGER_PRESENT, HELP_BUTTON
 };
 constexpr size_t Count = sizeof(All) / sizeof(All[0]);
 constexpr bool unique(size_t first = 0, size_t next = 1) {
@@ -37,11 +39,15 @@ constexpr bool allowed(size_t index = 0) {
     : (All[index] == 0 || All[index] == 2 || All[index] == 4 || All[index] == 5 ||
        (All[index] >= 13 && All[index] <= 19) || (All[index] >= 21 && All[index] <= 23) ||
       (All[index] >= 25 && All[index] <= 27) || All[index] == 32 || All[index] == 33 ||
-      (All[index] == 34 && All[index] == BATTERY_ADC))
+       (All[index] == 34 && All[index] == BATTERY_ADC) ||
+       (All[index] == 35 && All[index] == CHARGER_PRESENT) ||
+       (All[index] == 39 && All[index] == HELP_BUTTON))
       && allowed(index + 1);
 }
 static_assert(unique(), "Every component must have its own GPIO");
     static_assert(allowed(), "Unsupported GPIO or reserved GPIO12/flash/UART pin");
     static_assert(BATTERY_ADC == 34, "Battery divider requires input-only ADC1 GPIO34");
+static_assert(CHARGER_PRESENT == 35, "Charger sense needs an input-only RTC GPIO for wake");
+static_assert(HELP_BUTTON == 39, "Help button uses input-only GPIO39 with an external pull-up");
 static_assert(ENCODER_SW == 4, "Changing wake GPIO requires reviewing RTC wake wiring");
 }

@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $checker = Join-Path $PSScriptRoot 'Check-Design.ps1'
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('nfc-design-checks-' + [guid]::NewGuid().ToString('N'))
-$cases = @('gpio12', 'duplicate', 'unsupported', 'adc-pin', 'adc-output', 'pinout', 'pinout-owner', 'bom', 'pulldown', 'strap', 'brownout')
+$cases = @('gpio12', 'duplicate', 'unsupported', 'adc-pin', 'adc-output', 'charger-pin', 'charger-output', 'help-pin', 'help-output', 'pinout', 'pinout-owner', 'bom', 'pulldown', 'strap', 'brownout')
 try {
     foreach ($case in $cases) {
         $fixture = Join-Path $temporary $case
@@ -39,6 +39,26 @@ try {
                 $text = (Get-Content $pinsPath -Raw).Replace('AMP_ENABLE = 2;', 'AMP_ENABLE = 34;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Input-only GPIO34'
+            }
+            'charger-pin' {
+                $text = (Get-Content $pinsPath -Raw).Replace('CHARGER_PRESENT = 35;', 'CHARGER_PRESENT = 17;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Charger sense requires RTC input GPIO35'
+            }
+            'charger-output' {
+                $text = (Get-Content $pinsPath -Raw).Replace('AMP_ENABLE = 2;', 'AMP_ENABLE = 35;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Input-only GPIO35'
+            }
+            'help-pin' {
+                $text = (Get-Content $pinsPath -Raw).Replace('HELP_BUTTON = 39;', 'HELP_BUTTON = 17;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Help button requires input-only GPIO39'
+            }
+            'help-output' {
+                $text = (Get-Content $pinsPath -Raw).Replace('AMP_ENABLE = 2;', 'AMP_ENABLE = 39;')
+                [IO.File]::WriteAllText($pinsPath, $text)
+                $expected = 'Input-only GPIO39'
             }
             'pinout' {
                 $path = Join-Path $fixture 'PINOUT.md'
