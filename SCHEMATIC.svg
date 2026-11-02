@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1640" height="1680" viewBox="0 0 1640 1680" role="img" aria-labelledby="title desc">
   <title id="title">NFC player battery-only connection drawing</title>
-  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. Signal wire colors match by role across components. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
+  <desc id="desc">Functional wiring reference for the original TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor, IP5310 and four-ohm three-watt speaker. An XL6009 boost converter drives the 5 V load from the PCM output in parallel with the IP5310 input; the IP5310 output is left unused and the pack is parallel VTC5A cells. Signal wire colors match by role across components. Named supply nets connect across panels. This is not a verified clone-module schematic.</desc>
   <defs>
     <style>
       text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
@@ -35,9 +35,10 @@
 
   <text x="40" y="145" class="heading">1. Protected power distribution</text>
   <rect x="50" y="185" width="170" height="110" class="box"/>
-  <text x="70" y="219" class="part">1S Li-ion cell</text>
-  <text x="70" y="245" class="small">3.6/3.7 V nominal</text>
-  <text x="70" y="272" class="small">4.20 V charge type</text>
+  <text x="70" y="214" class="part">VTC5A pack</text>
+  <text x="70" y="238" class="small">1S, cells in parallel</text>
+  <text x="70" y="260" class="small">3.6 V nom / 4.2 V max</text>
+  <text x="70" y="282" class="tiny muted">Match capacity and IR</text>
   <text x="225" y="200" class="small positive">+</text>
   <text x="225" y="285" class="small">-</text>
   <path d="M220 210 H255 M345 210 H390" class="supply"/>
@@ -50,24 +51,44 @@
   <text x="403" y="274" class="small">B-</text>
   <text x="616" y="213" class="small">P+</text>
   <text x="616" y="274" class="small">P-</text>
-  <path d="M650 210 H750" class="supply"/>
-  <path d="M650 270 H750" class="wire"/>
-  <rect x="750" y="180" width="265" height="140" class="box"/>
-  <text x="805" y="251" class="part">IP5310 / K648</text>
-  <text x="762" y="212" class="small">BAT+</text>
-  <text x="762" y="274" class="small">BAT-</text>
-  <text x="963" y="212" class="small">OUT+</text>
-  <text x="963" y="274" class="small">OUT-</text>
-  <path d="M1015 210 H1090 M1090 210 L1142 188 M1147 210 H1270" class="supply"/>
-  <circle cx="1090" cy="210" r="4" fill="#b62c35"/>
-  <circle cx="1147" cy="210" r="4" fill="#b62c35"/>
-  <text x="1080" y="166" class="small">SW_LOAD</text>
-  <path d="M1015 270 H1270" class="wire"/>
-  <rect x="1270" y="180" width="310" height="140" class="box"/>
-  <text x="1290" y="212" class="part">LOAD_5V star</text>
-  <text x="1290" y="242" class="small">Separate load branches</text>
-  <text x="1290" y="274" class="part">LOAD_GND star</text>
-  <text x="750" y="349" class="small">1000 uF + 100 nF across IP5310 output; verify startup with fitted capacitance.</text>
+  <path d="M650 210 H700" class="supply"/>
+  <path d="M650 270 H700" class="wire"/>
+  <circle cx="700" cy="210" r="4" fill="#b62c35"/>
+  <circle cx="700" cy="270" r="4" class="dot"/>
+
+  <path d="M700 210 H740" class="supply"/>
+  <path d="M700 270 H740" class="wire"/>
+  <rect x="740" y="180" width="235" height="140" class="box"/>
+  <text x="758" y="246" class="part">IP5310 / K648</text>
+  <text x="758" y="270" class="small">charge only</text>
+  <text x="752" y="212" class="small">BAT+</text>
+  <text x="752" y="290" class="small">BAT-</text>
+  <text x="915" y="212" class="small muted">OUT+</text>
+  <text x="915" y="290" class="small muted">OUT-</text>
+  <text x="980" y="252" class="tiny muted">n/c</text>
+
+  <path d="M700 210 V165 H1035 V212 H1045" class="supply"/>
+  <path d="M700 270 V330 H1035 V290 H1045" class="wire"/>
+  <text x="815" y="158" class="tiny muted">parallel to IP5310 IN</text>
+  <rect x="1045" y="180" width="195" height="140" class="box"/>
+  <text x="1053" y="246" class="part">XL6009 boost</text>
+  <text x="1053" y="270" class="small">~5 V + heatsink</text>
+  <text x="1057" y="212" class="small">IN+</text>
+  <text x="1057" y="290" class="small">IN-</text>
+  <text x="1178" y="212" class="small">OUT+</text>
+  <text x="1178" y="290" class="small">OUT-</text>
+
+  <path d="M1240 210 H1258 M1258 210 L1280 194 M1286 210 H1290" class="supply"/>
+  <circle cx="1258" cy="210" r="4" fill="#b62c35"/>
+  <circle cx="1286" cy="210" r="4" fill="#b62c35"/>
+  <text x="1248" y="186" class="small">SW_LOAD</text>
+  <path d="M1240 270 H1290" class="wire"/>
+  <rect x="1290" y="180" width="290" height="140" class="box"/>
+  <text x="1308" y="212" class="part">LOAD_5V star</text>
+  <text x="1308" y="242" class="small">Separate load branches</text>
+  <text x="1308" y="274" class="part">LOAD_GND star</text>
+  <text x="745" y="352" class="small">IP5310 OUT unused - battery charging only.</text>
+  <text x="1045" y="352" class="small">XL6009 set ~5 V; 1000 uF + 100 nF at output; heatsink the IC.</text>
   <text x="50" y="350" class="small">A protected pack already contains a PCM.</text>
   <text x="50" y="374" class="small warning">Never join raw B- to system GND around the protection.</text>
   <text x="750" y="374" class="small">All LOAD_GND labels below join the protected system return, not raw cell negative.</text>

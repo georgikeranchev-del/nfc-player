@@ -32,9 +32,12 @@ constexpr uint32_t MOTOR_UPDATE_MS = 15;
 
 constexpr size_t AUDIO_BUFFER_BYTES = 8192;
 constexpr uint32_t AUDIO_FADE_MS = 1000;
-constexpr uint8_t INITIAL_VOLUME = 12;
+// VOLUME_SCALE is the full-scale gain reference; MAX_VOLUME caps the knob below
+// it to limit amplifier power so the XL6009 boost stays within current/thermal limits.
+constexpr uint8_t VOLUME_SCALE = 21;
+constexpr uint8_t INITIAL_VOLUME = 10;
 constexpr uint8_t MIN_VOLUME = 0;
-constexpr uint8_t MAX_VOLUME = 21;
+constexpr uint8_t MAX_VOLUME = 15;
 
 constexpr uint8_t LED_COUNT = 24;
 constexpr uint8_t LED_BRIGHTNESS = 100;
@@ -59,6 +62,8 @@ static_assert(MOTOR_RAMP_MS > 0 && AUDIO_FADE_MS > 0 && LED_START_MS > 0 && LED_
 static_assert(KEY_PULSE_MS > 0 && KEY_PULSE_MS < KEY_INTERVAL_MS, "Invalid KEY timing");
 static_assert(MIN_VOLUME <= INITIAL_VOLUME && INITIAL_VOLUME <= MAX_VOLUME && MAX_VOLUME > 0,
               "Invalid volume settings");
+static_assert(MAX_VOLUME <= VOLUME_SCALE && VOLUME_SCALE > 0,
+              "Selectable volume must not exceed full-scale gain reference");
 static_assert(LED_COUNT > 0 && MAX_PLAYS > 0 && NFC_MISSING_READS > 0, "Counts must be positive");
 static_assert(LED_START_BRIGHTNESS <= LED_BRIGHTNESS, "LED startup brightness must not exceed steady brightness");
 static_assert((LED_PATTERN_MASK & 0x0FFF) != 0 && (LED_PATTERN_MASK & 0xF000) == 0,

@@ -30,7 +30,7 @@ void AudioPlayer::applyGain(uint32_t now) {
   if (!running_) { output_->SetGain(0.0f); return; }
   uint32_t elapsed = now - fadeAt_;
   float fade = elapsed >= Config::AUDIO_FADE_MS ? 1.0f : static_cast<float>(elapsed) / Config::AUDIO_FADE_MS;
-  float level = static_cast<float>(volume_) / Config::MAX_VOLUME;
+  float level = static_cast<float>(volume_) / Config::VOLUME_SCALE;
   output_->SetGain(level * level * fade);
 }
 
