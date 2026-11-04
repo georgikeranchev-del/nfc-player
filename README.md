@@ -100,8 +100,7 @@ USB VBUS present and the pack reads at least 3.70 V for 30 s. Hard low-battery
 sleep then wakes on charger insertion, or polls every 30 s while it stays plugged
 in. Unverified until bench-tested; see [WIRING.md](WIRING.md#charger-present-sense).
 Sleep does not isolate the battery, and the converter/peripherals still draw
-current. The PCM remains required. Startup volume is 10, selectable maximum 15,
-with the original full-scale gain reference of 21 retained.
+current. The PCM remains required. Startup volume is 12, selectable maximum 21.
 
 The supplied tag UIDs and assigned songs are listed in the rendered
 [NFC tag table](NFC_TAGS.md). Use each UID exactly as shown for the MP3 filename.

@@ -50,9 +50,9 @@ constexpr uint32_t MOTOR_UPDATE_MS = 15;
 constexpr size_t AUDIO_BUFFER_BYTES = 8192;
 constexpr uint32_t AUDIO_FADE_MS = 1000;
 constexpr uint8_t VOLUME_SCALE = 21;
-constexpr uint8_t INITIAL_VOLUME = 10;
+constexpr uint8_t INITIAL_VOLUME = 12;
 constexpr uint8_t MIN_VOLUME = 0;
-constexpr uint8_t MAX_VOLUME = 15;
+constexpr uint8_t MAX_VOLUME = 21;
 
 constexpr uint8_t LED_COUNT = 24;
 constexpr uint8_t LED_BRIGHTNESS = 100;
