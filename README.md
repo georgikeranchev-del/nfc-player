@@ -76,9 +76,7 @@ at the current volume, for at most 2 minutes, with the motor off. Press again to
 stop it; the encoder adjusts its volume; presenting a tag stops it and starts
 that song. It is ignored during songs, warnings and sleep. Below the song-start
 voltage it plays the low-battery warning instead. Supply the file yourself; a
-missing file is reported on serial and plays nothing. The speech-ready script is
-[HELP_GUIDE.txt](HELP_GUIDE.txt); save its narrated audio as `/player/help.mp3`
-on the SD card. See
+missing file is reported on serial and plays nothing. See
 [WIRING.md](WIRING.md#help-button).
 
 Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5310 is

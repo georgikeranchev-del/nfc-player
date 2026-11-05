@@ -219,75 +219,137 @@ tests; those need a separately reviewed measurement connection.
 
 ## Battery voltage calibration and cutoff
 
-The 1S2P VTC5A pack is about 3.6 V nominal and 4.20 V full, just like one cell.
-Do not calibrate to "3.7 V", assume a freshly charged cell is exactly 4.20 V,
-or map voltage linearly to a charge percentage. Use a meter and the actual
-protected, switched boost-input voltage. All steps below are unverified procedures.
+This section does two jobs: (1) make the voltage the firmware reports match your
+multimeter, and (2) check that the low-battery cutoffs trigger. The pack is about
+3.6 V nominal and 4.20 V full, like a single cell. Always calibrate against the
+meter, never against "3.7 V" or a charge percentage. All procedures here are
+unverified until you record results.
 
-1. With power off, check 100k from SW_BAT+ to the ADC node and 47k/100nF from that
-   node to LOAD_GND. Check parts individually if in-circuit paths affect the meter.
-   Initially leave GPIO34 disconnected. Power only the validated supply and
-   divider; verify `V_ADC = V_SW_BAT * 47 / 147` (about 1.343 V at 4.20 V).
-   Power off before attaching GPIO34. Never expose it directly to the pack/5 V.
-2. Use a healthy pack above 3.50 V for boot. Read the log at 115200 baud without
-   connecting DevKit USB alongside the boost. One bench option is a verified
-   **receive-only 3.3 V-compatible USB-UART adapter**: ESP32 TX0/GPIO1 to adapter
-   RX, adapter GND to LOAD_GND; leave adapter VCC, TX, DTR and RTS disconnected.
-   Confirm its RX is high impedance and remove the RX lead before powering the
-   ESP32 down. No charger, shunt setup or other grounded instrument in this
-   logging setup. An appropriate isolated receiver is another option; never
-   assume a generic USB isolator solves board power-path conflicts.
-3. With the player idle and voltage stable, use an isolated handheld meter across
-   **SW_BAT+ and LOAD_GND** and record the simultaneous `pack: ... mV` log. Do not
-   use the ADC-pin reading as the pack reading or measure raw B- to system GND.
-   Start with `BATTERY_CALIBRATION_PERMILLE = 1000` in config.h.
-4. Calculate the new factor below, round to the nearest integer, rebuild/upload
-   with the player harness disconnected, remove programming USB and reconnect.
-   Example: meter 3900 mV, firmware 3750 mV, old factor 1000 gives **1040**.
-   If correction is outside 800-1200, investigate values/wiring/ADC range instead
-   of relaxing the configuration check.
-5. Recheck at another healthy voltage, for example 3.6 V and 4.1 V, and near
-   cutoff using the supply test below. Aim for agreement within about 50 mV
-   around cutoff; this is a bench acceptance target, not guaranteed ADC accuracy.
-   A one-factor correction cannot fix substantial nonlinearity or ground noise.
-   Record error under load and leave extra cutoff margin if needed.
+The firmware reports the voltage at **SW_BAT+**: the supply-side end of the 100k
+resistor (the same net as the boost input). **GND** below means the ESP32 GND pin.
+
+### What you need
+
+| Item | Notes |
+|---|---|
+| Digital multimeter, DC volts | Needs 0.001 V resolution on a 20 V range. Its accuracy limits the calibration, so use the same meter for every reading. |
+| Adjustable DC source, 3.0-4.3 V | A bench supply with current limit (set 50 mA) is best. Without one, a buck module (LM2596-type) powered from a USB 5 V charger works: trim its output with the meter BEFORE connecting anything. |
+| ESP32 DevKit alone, USB cable, PC | Arduino IDE serial monitor at 115200 baud. |
+| Divider parts | 100k 1%, 47k 1%, 100nF, plus a spare 100k (for GPIO35), clip leads and a breadboard. |
+| Optional | A second meter to cross-check the first. |
+
+### Part 1: bench calibration (DevKit alone, nothing else attached)
+
+Using only the DevKit on its own USB cable avoids every power-path conflict: there
+is no boost, no battery and no peripheral. Disconnect the player harness first.
+
+```text
+source + --[100k]--+--[47k]-- GND          source - ---- ESP32 GND
+                   +--[100nF]-- GND
+                   +--> D34 (GPIO34)
+ESP32 3V3 --[100k]--> D35 (GPIO35, reads HIGH = no charger)
+```
+
+1. **Measure the resistors** out of circuit with the meter in resistance mode and
+   write down both values (for example 99.6k and 47.2k).
+2. **Set the source** to 4.00 V with the 50 mA limit, checking it with the meter
+   across the source terminals. Never go above 4.3 V: the firmware treats
+   anything above 4.35 V as a wiring fault.
+3. **Check the divider before the ESP32 sees it.** Connect the source with D34 still
+   disconnected. Meter red probe on the 100k/47k junction, black on GND. Expect
+   `4.00 x R47 / (R100 + R47)`, about 1.279 V. If it is more than 1% off, fix the
+   wiring before going on. The meter loads the junction slightly, so a reading
+   about 0.3% low is normal.
+4. **Connect the junction to D34**, plug in USB and upload the firmware. Open the
+   serial monitor at 115200 baud. Every 5 s you will see a line such as
+   `Battery ADC: 1275 mV; pack: 3975 mV; charger: absent`. A later "SD
+   initialization failed" fault is expected: nothing else is attached, and battery
+   monitoring keeps running.
+5. **Record a table.** For each source setting of **4.10, 3.90, 3.70 and 3.50 V**:
+   wait 20 s, then read the meter between the source + and GND (this is
+   `V_meter`), and take the average of three consecutive `pack:` readings (this is
+   `V_reported`). Stay at or above 3.50 V: at or below 3.30 V for 2 s the
+   firmware correctly deep-sleeps (reset with the EN button to restart it).
+6. **Compute the factor** for each row, starting from `BATTERY_CALIBRATION_PERMILLE
+   = 1000`:
 
 $$
 C_{new}=\operatorname{round}\left(C_{old}\frac{V_{meter}}{V_{reported}}\right)
 $$
 
-**Cutoff test:** disconnect the real pack and charging USB completely. Substitute
-a suitable current-limited bench supply at the protected-source interface, with
-current limit/wiring adequate for the measured startup load; never parallel it
-with the cells. Begin at 3.8-4.0 V, verify stable 5 V output, then reduce slowly.
-Validate at/below 3.30 V for 2 s stops motor/audio/NFC polling and clears LEDs;
-a shorter dip followed by recovery does not. Validate <=3.00 V stops on the next
-sample without the 2 s delay. Loop/library delays mean no hard deadline is
-promised. Do not deliberately over-discharge the actual VTC5A cells for this test.
+   Example: meter 3900 mV, firmware 3750 mV, old factor 1000 gives **1040**. If the
+   four factors differ by more than about 10, suspect poor clip contact, a noisy
+   ground or a wrong resistor value. Use the 3.70 V row if the spread is small. A
+   result outside 800-1200 means a wiring or value error, not a reason to relax
+   the limit.
+7. **Enter it** at [config.h](firmware/nfc_player/config.h#L23), upload again and
+   repeat the check at 4.10, 3.70 and 3.50 V. Accept if the reported value is within
+   about 30 mV of the meter. Also look at 3.35 V, close to the cutoff: about 50 mV
+   there is a reasonable bench target. One factor cannot fix large nonlinearity.
 
-Confirm a held encoder cannot prevent shutdown, voltage rebound cannot restart
-playback, and the button cannot wake hard low-battery sleep. Restore a healthy
-supply and power-cycle: boot at >=3.50 V must allow songs; boot at/below 3.30 V
-must not initialize SD/NFC/audio. Between those thresholds, only warning/idle
-operation is permitted. Verify normal user/idle sleep still wakes by encoder. Measure remaining
-sleep current and open SW_LOAD afterward; software has not disconnected the
-boost/peripherals. Keep the PCM and validate its documented limits independently.
+### Part 2: hard cutoffs on the same rig
 
-**Soft inhibition test:** place a short `/player/low_battery.mp3` on the SD card.
-With the substitute supply above 3.30 V but below 3.50 V, a new tag must play
-that warning at fixed volume 10 with motor/LEDs off, not the tag's song. Remove
-and re-present to request it again; leaving a tag in place must not loop it.
-Removing the tag during a warning must not truncate it. Verify the 10 s timeout,
-missing/corrupt warning behavior, and that hard cutoff preempts the warning.
-Start a song at a healthy voltage, then hold below 3.50 V for 5 s: playback must
-stop but NFC remain active. Brief dips should not stop an already playing song.
-Confirm rebound and normal sleep/wake do not clear inhibition. Charger recovery:
-with the player inhibited, a rebound alone must not clear it; plugging the charger
-and holding >=3.70 V for 30 s must, and unplugging or dropping below 3.70 V
-restarts that timer. Check GPIO35 reads LOW with USB present and HIGH without it,
-and that hard low-battery sleep wakes on plug-in (and polls every 30 s if USB is
-already present). Measure VBUS at the gate (about 4.5 V) and confirm no signal
-reaches the GPIO other than 3.3 V logic.
+These work with the bare DevKit. The D35 pull-up must be fitted so the charger reads
+absent. Start at 3.60 V and watch the serial log.
+
+| Do this | Expect |
+|---|---|
+| Drop to 3.25 V and hold | After about 2 s: "Battery voltage unsafe ... waking for charger", then silence (deep sleep). |
+| Raise to 3.80 V | It stays asleep. Only EN resets it. |
+| Set 3.25 V, press EN | It logs the reading, then sleeps again without any SD message. |
+| Run at 3.60 V, drop quickly to 2.9 V | Sleeps within one sample (about 0.25 s), no 2 s wait. |
+| Set 4.40 V, press EN | Sleeps ("unsafe"): above 4.35 V is treated as a fault. |
+| 3.60 V, drop to 3.25 V for 1 s, back to 3.60 V | Keeps running: a short dip must not trigger shutdown. |
+| In low-battery sleep, touch D35 to GND briefly | The ESP32 wakes (this simulates plugging the charger in). Holding D35 low while still at 3.25 V makes it wake and re-sleep about every 30 s. |
+
+### Part 3: low-battery lockout on the assembled player (no discharging)
+
+You do not need to drain the cells. Temporarily move the thresholds so the real,
+healthy pack counts as "low". Read the current pack voltage from the serial log (say
+3.90 V) and change these in [config.h](firmware/nfc_player/config.h):
+
+| Constant | Normal | Temporary test value |
+|---|---|---|
+| `BATTERY_START_MIN_MV` ([line 27](firmware/nfc_player/config.h#L27)) | 3500 | pack + 150 mV (4050) |
+| `BATTERY_RECOVER_MV` ([line 33](firmware/nfc_player/config.h#L33)) | 3700 | start-min + 150 mV (4200), and below 4350 |
+
+The compile-time checks keep the order CRITICAL < LOW < START_MIN < RECOVER < 4350, so
+a bad combination will not build. Upload with the harness disconnected and only the
+DevKit USB connected (the usual programming rule), remove USB, reconnect and test.
+To test the hard cutoff instead, set `BATTERY_LOW_MV` (line 28) above the pack
+voltage with START_MIN above it. **Restore all values to the normal column afterwards
+and upload again.**
+
+Checks:
+- **Warning file:** put a short `/player/low_battery.mp3` on the SD card. Present a
+  tag: the warning must play once at fixed volume 10 with motor and LEDs off, not
+  the song. Remove and re-present for another warning; a tag left in place must not
+  loop it. Removing the tag mid-warning must not cut it short. It stops by itself
+  after 10 s; a missing or corrupt file stays silent and the song never plays.
+- **Song cut-off:** start a song at a healthy voltage, then make the pack count as
+  low for 5 s: playback must stop while the NFC reader stays active. A dip shorter
+  than 5 s must not stop a playing song.
+- **Latch:** a voltage rebound and a normal sleep/wake must not clear the lock.
+- **Hard cutoff:** a held encoder button cannot prevent shutdown; the button cannot
+  wake low-battery sleep; a boot at or below 3.30 V must not start SD, NFC or audio;
+  between 3.30 V and 3.50 V only warning/idle is allowed. Normal idle sleep must
+  still wake with the encoder.
+- **Afterwards:** measure the remaining sleep current and open SW_LOAD. The
+  boost and peripherals are still connected during software sleep.
+
+### Charger recovery check
+
+This needs the 2N7000 sense circuit fitted. With the player locked out (Part 3
+values), a voltage rebound alone must not clear the lock. Plug in the charger and
+watch the log: it must show `charger: present`, and the lock clears only when the
+pack stays at or above `BATTERY_RECOVER_MV` for 30 s. Unplugging, or dropping below
+that value, restarts the 30 s timer. How far the voltage rises under charge depends
+on the charge current, so choose the test value after watching the `pack:` log while
+charging. Also confirm that GPIO35 reads LOW with USB present and HIGH without, that
+hard low-battery sleep wakes on plug-in (and re-checks every 30 s if USB is already
+present), that the 2N7000 gate sits at about 4.5 V with USB present, and that
+nothing above 3.3 V ever reaches the GPIO. Keep the PCM independent and validate its
+documented limits separately.
 
 ## Choosing the motor ramp duration
 

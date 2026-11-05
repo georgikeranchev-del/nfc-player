@@ -184,6 +184,19 @@ sample and a 250 ms sample interval. The measured value includes protection,
 switch and wiring drop; it is the boost-input voltage, not a separate raw-cell
 measurement. The ratio is not doubled for two parallel cells.
 
+ADC background, from the ESP-IDF
+[ADC](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/adc/index.html) and
+[calibration](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/adc/adc_calibration.html)
+guides: the classic ESP32 ADC reference is nominally 1100 mV but varies between
+1000 and 1200 mV per chip, and the calibration driver corrects that using eFuse
+values (your chip reports Vref calibration burned). Espressif also recommends a
+100 nF ceramic at the ADC pin and multisampling against noise, as used here
+(their graph uses 64 samples; this firmware uses 16). The Arduino
+`analogReadMilliVolts` call is expected to apply that eFuse calibration, but this
+is not yet verified on the actual board. The meter-derived factor below then corrects
+what remains: resistor tolerance and residual ADC error. It is one point, so
+also check it at a second voltage.
+
 Calibrate `BATTERY_CALIBRATION_PERMILLE` in
 [config.h](firmware/nfc_player/config.h) against a meter across SW_BAT+/LOAD_GND,
 not against the nominal cell rating or a percentage estimate. The serial log
