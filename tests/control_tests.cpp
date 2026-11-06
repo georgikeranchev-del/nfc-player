@@ -339,6 +339,13 @@ int main() {
       }
     }
     {
+      Rig rig; rig.power.charger = true; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Playing, "charging reaches playback");
+      rig.power.millivolts = Config::BATTERY_MAX_VALID_MV + 1; rig.step(); rig.step(Config::BATTERY_LOW_HOLD_MS);
+      require(!rig.power.slept && rig.audio.active && rig.player.state() == PlayerState::Playing,
+        "over-range reading while charging does not cut playback");
+    }
+    {
       Rig rig; rig.boot(); rig.tag("A1");
       rig.power.millivolts = Config::BATTERY_CRITICAL_MV; rig.step();
       require(rig.power.slept && rig.pwm.duty == 0 && rig.audio.starts == 0,

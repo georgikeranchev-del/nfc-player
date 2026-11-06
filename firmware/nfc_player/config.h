@@ -27,7 +27,8 @@ constexpr uint32_t BATTERY_LOG_MS = 5000;
 constexpr uint32_t BATTERY_START_MIN_MV = 3500;
 constexpr uint32_t BATTERY_LOW_MV = 3300;
 constexpr uint32_t BATTERY_CRITICAL_MV = 3000;
-constexpr uint32_t BATTERY_MAX_VALID_MV = 4350;
+// Divider-fault sentinel, not cell protection; above the ADC high-end over-read of a full 1S pack.
+constexpr uint32_t BATTERY_MAX_VALID_MV = 4600;
 constexpr uint32_t BATTERY_LOW_HOLD_MS = 2000;
 constexpr uint32_t BATTERY_SOFT_HOLD_MS = 5000;
 constexpr uint32_t BATTERY_RECOVER_MV = 3700;

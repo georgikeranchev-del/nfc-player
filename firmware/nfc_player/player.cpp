@@ -15,7 +15,7 @@ void Player::begin(uint32_t now) {
   if (!powerReady) { fail("Power monitoring initialization failed", now); return; }
   if (!Motor.begin()) { fail("Motor PWM initialization failed", now); return; }
   if (Power.batteryMillivolts() <= Config::BATTERY_LOW_MV ||
-      Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV) {
+      (Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV && !Power.chargerPresent())) {
     sleepForBattery(now);
     return;
   }
@@ -49,7 +49,9 @@ void Player::sleep(bool allowButtonWake, bool allowChargerWake) {
 
 bool Player::batteryLow(uint32_t now) {
   uint32_t voltage = Power.batteryMillivolts();
-  if (voltage <= Config::BATTERY_CRITICAL_MV || voltage > Config::BATTERY_MAX_VALID_MV) return true;
+  if (voltage <= Config::BATTERY_CRITICAL_MV) return true;
+  // Over-range is a divider-fault sentinel; charging legitimately elevates the reading, so trust the PCM then.
+  if (voltage > Config::BATTERY_MAX_VALID_MV && !Power.chargerPresent()) return true;
   if (voltage > Config::BATTERY_LOW_MV) { lowBatteryPending_ = false; return false; }
   if (!lowBatteryPending_) { lowBatteryPending_ = true; lowBatteryAt_ = now; }
   return now - lowBatteryAt_ >= Config::BATTERY_LOW_HOLD_MS;

@@ -311,9 +311,9 @@ healthy pack counts as "low". Read the current pack voltage from the serial log 
 | Constant | Normal | Temporary test value |
 |---|---|---|
 | `BATTERY_START_MIN_MV` ([line 27](firmware/nfc_player/config.h#L27)) | 3500 | pack + 150 mV (4050) |
-| `BATTERY_RECOVER_MV` ([line 33](firmware/nfc_player/config.h#L33)) | 3700 | start-min + 150 mV (4200), and below 4350 |
+| `BATTERY_RECOVER_MV` ([line 33](firmware/nfc_player/config.h#L33)) | 3700 | start-min + 150 mV (4200), and below 4600 |
 
-The compile-time checks keep the order CRITICAL < LOW < START_MIN < RECOVER < 4350, so
+The compile-time checks keep the order CRITICAL < LOW < START_MIN < RECOVER < 4600, so
 a bad combination will not build. Upload with the harness disconnected and only the
 DevKit USB connected (the usual programming rule), remove USB, reconnect and test.
 To test the hard cutoff instead, set `BATTERY_LOW_MV` (line 28) above the pack
