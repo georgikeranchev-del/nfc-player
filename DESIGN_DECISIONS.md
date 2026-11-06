@@ -20,16 +20,19 @@ monolith and old KiCad diagrams are not maintained build inputs.
   switch is unsuitable with a permanently connected battery ADC divider because
   it can back-power the ESP32. This is not an all-source USB cutoff.
 - No KEY pulses or KEY driver are used. No charger/load mux is implemented.
-- Deep sleep leaves boards and the converter connected. Battery monitoring
-  stops in sleep; firmware is not a replacement for a PCM or hardware disconnect.
-- Software stages initialization/actuation, not physical power to every board.
-  True per-board rail sequencing requires load switches, not extra delays.
+- Deep sleep leaves the boost, ESP32 and divider connected, but switches the
+  peripheral 5 V rail (SD, PN532, amp, LEDs, motor) off through a P-MOSFET on GPIO17.
+  Battery monitoring stops in sleep; firmware is not a replacement for a PCM or
+  hardware disconnect.
+- The switch is high-side P-MOSFET driven by a 2N7000 so the 3.3 V GPIO can fully
+  turn it off against 5 V; pulldown on GPIO17 keeps the rail off in reset/sleep.
+  The rail is enabled only after a safe first battery reading.
 
 ## One visible control
 
 The current encoder remains connected to GPIO4/GND, active LOW. It handles
-volume, normal powered-sleep wake and long-press sleep. GPIO17 and the former KEY
-driver are unused. Cold-start is by SW_LOAD. Low-battery sleep deliberately has
+volume, normal sleep wake and long-press sleep. GPIO17 now drives the peripheral
+5 V switch; the former KEY driver is gone. Cold-start is by SW_LOAD. Low-battery sleep deliberately has
 no button/timer wake: switch off, recharge, then switch on. A single encoder does
 not provide a physical battery disconnect; keep the DC-rated switch accessible.
 

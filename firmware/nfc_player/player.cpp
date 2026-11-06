@@ -5,6 +5,10 @@
 void Player::begin(uint32_t now) {
   bootAt_ = lastActivity_ = buttonChanged_ = now;
   bool powerReady = Power.begin();
+  bool batteryUnsafe = Power.batteryMillivolts() <= Config::BATTERY_LOW_MV ||
+      (Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV && !Power.chargerPresent());
+  // The switched 5 V rail stays off until the pack is known to be safe, so unsafe starts load nothing.
+  if (powerReady && !batteryUnsafe) Power.enablePeripherals();
   Encoder.begin();
   buttonRaw_ = buttonStable_ = Encoder.pressed();
   buttonArmed_ = !buttonRaw_;
@@ -14,8 +18,7 @@ void Player::begin(uint32_t now) {
   Leds.mode(LedMode::Off, now);
   if (!powerReady) { fail("Power monitoring initialization failed", now); return; }
   if (!Motor.begin()) { fail("Motor PWM initialization failed", now); return; }
-  if (Power.batteryMillivolts() <= Config::BATTERY_LOW_MV ||
-      (Power.batteryMillivolts() > Config::BATTERY_MAX_VALID_MV && !Power.chargerPresent())) {
+  if (batteryUnsafe) {
     sleepForBattery(now);
     return;
   }

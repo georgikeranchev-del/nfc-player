@@ -7,6 +7,7 @@ enum class LedMode { Off, Standby, Starting, Playing, Stopping };
 struct IPower {
   virtual ~IPower() = default;
   virtual bool begin() = 0;
+  virtual void enablePeripherals() = 0;
   virtual void tick(uint32_t now) = 0;
   virtual uint32_t batteryMillivolts() const = 0;
   virtual bool playbackInhibited() const = 0;

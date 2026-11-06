@@ -15,8 +15,10 @@ struct FakePower : IPower {
   bool ok = true, slept = false, buttonWake = true, chargerWake = false, charger = false;
   bool inhibited = false;
   uint32_t ticks = 0;
+  int rails = 0;
   uint32_t millivolts = 3800;
   bool begin() override { return ok; }
+  void enablePeripherals() override { ++rails; }
   void tick(uint32_t) override { ++ticks; }
   uint32_t batteryMillivolts() const override { return millivolts; }
   bool playbackInhibited() const override { return inhibited; }
@@ -118,6 +120,7 @@ int main() {
       rig.player.begin(0);
       rig.step(Config::BOOT_SD_EARLIEST_MS - 1);
       require(rig.storage.initialized == 0 && rig.pwm.duty == 0, "safe before first boot stage");
+      require(rig.power.rails == 1, "peripheral rail enabled once, before the SD stage");
       rig.step();
       require(rig.storage.initialized == 1 && rig.nfc.initialized == 0, "SD first");
       rig.step(Config::BOOT_NFC_EARLIEST_MS - Config::BOOT_SD_EARLIEST_MS);
@@ -215,6 +218,7 @@ int main() {
         require(rig.power.chargerWake, "unsafe startup voltage can wake for a charger");
         require(rig.storage.initialized == 0 && rig.nfc.initialized == 0 && rig.audio.initialized == 0,
           "unsafe startup voltage blocks peripheral initialization");
+        require(rig.power.rails == 0, "unsafe startup never switches the peripheral rail on");
         require(rig.pwm.duty == 0 && !rig.audio.active && rig.leds.current == LedMode::Off,
           "unsafe startup leaves loads off");
       }

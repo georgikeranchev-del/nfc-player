@@ -4,6 +4,7 @@
 class PowerControl : public IPower {
 public:
   bool begin() override;
+  void enablePeripherals() override;
   void tick(uint32_t now) override;
   uint32_t batteryMillivolts() const override { return batteryMillivolts_; }
   bool playbackInhibited() const override;

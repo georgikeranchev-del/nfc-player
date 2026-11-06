@@ -97,8 +97,9 @@ clear it. Songs are re-enabled only when the 2N7000 sense (GPIO35) reports IP530
 USB VBUS present and the pack reads at least 3.70 V for 30 s. Hard low-battery
 sleep then wakes on charger insertion, or polls every 30 s while it stays plugged
 in. Unverified until bench-tested; see [WIRING.md](WIRING.md#charger-present-sense).
-Sleep does not isolate the battery, and the converter/peripherals still draw
-current. The PCM remains required. Startup volume is 12, selectable maximum 21.
+Sleep does not isolate the battery: the boost, ESP32 and divider stay on, but the
+peripheral 5 V rail (SD, PN532, amp, LEDs, motor) is switched off by GPIO17. The PCM
+remains required. Startup volume is 12, selectable maximum 21.
 
 The supplied tag UIDs and assigned songs are listed in the rendered
 [NFC tag table](NFC_TAGS.md). Use each UID exactly as shown for the MP3 filename.
@@ -109,9 +110,10 @@ After successful initialization with no tag, motor PWM stays at zero and the
 amplifier stays in shutdown. The LED ring shows its dim standby animation (off
 when low-battery-inhibited), NFC
 polling continues, and battery voltage is sampled every 250 ms while awake.
-This is lower-load operation, not zero current or disconnected peripheral power.
-After five minutes without activity, the firmware enters normal button-wake sleep.
-There are no IP5306 KEY pulses; GPIO17 is unused.
+This is lower-load operation, not zero current: the peripheral rail stays on while awake.
+After five minutes without activity, the firmware enters normal button-wake sleep
+and switches the peripheral rail off.
+There are no IP5306 KEY pulses; GPIO17 drives the peripheral 5 V switch.
 
 The firmware has no separate USB mode that disables idle sleep. **No tag does
 not make simultaneous boost VIN and DevKit USB safe.** For programming, disconnect

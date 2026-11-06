@@ -23,11 +23,12 @@ constexpr uint8_t AMP_ENABLE = 2;
 constexpr uint8_t BATTERY_ADC = 34;
 constexpr uint8_t CHARGER_PRESENT = 35;
 constexpr uint8_t HELP_BUTTON = 39;
+constexpr uint8_t PERIPH_POWER = 17;
 
 constexpr uint8_t All[] = {
   SD_CS, SD_SCK, SD_MISO, SD_MOSI, PN532_SS, PN532_SCK, PN532_MISO,
   PN532_MOSI, MOTOR_GATE, I2S_LRC, I2S_BCLK, I2S_DOUT, ENCODER_CLK,
-  ENCODER_DT, ENCODER_SW, LED_DATA, AMP_ENABLE, BATTERY_ADC, CHARGER_PRESENT, HELP_BUTTON
+  ENCODER_DT, ENCODER_SW, LED_DATA, AMP_ENABLE, BATTERY_ADC,   CHARGER_PRESENT, HELP_BUTTON, PERIPH_POWER
 };
 constexpr size_t Count = sizeof(All) / sizeof(All[0]);
 constexpr bool unique(size_t first = 0, size_t next = 1) {
