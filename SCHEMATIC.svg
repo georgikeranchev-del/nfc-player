@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1640" height="2090" viewBox="0 0 1640 2090" role="img" aria-labelledby="title desc">
   <title id="title">NFC player power and connection drawing</title>
-  <desc id="desc">Functional wiring reference for the TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor and four-ohm three-watt speaker. A protected VTC5A 1S2P pack feeds a TPS61088 JXL V1.10 set to 5 V. The load switch disconnects both converter input and the GPIO34 battery divider. IP5310 is charger-only on the unswitched protected pack; OUT pins are unused and there is no KEY driver. Named supply nets connect across panels. This is not a verified clone-module schematic or a hardware low-voltage disconnect.</desc>
+  <desc id="desc">Functional wiring reference for the TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor and four-ohm three-watt speaker. A protected VTC5A 1S2P pack feeds a TPS61088 JXL V1.10 set to 5 V. The load switch disconnects both converter input and the GPIO34 battery divider. IP5306 is charger-only on the unswitched protected pack; OUT pins are unused and there is no KEY driver. Named supply nets connect across panels. This is not a verified clone-module schematic or a hardware low-voltage disconnect.</desc>
   <defs>
     <style>
       text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
@@ -81,7 +81,7 @@
   <text x="755" y="365" class="small">USB-C 5 V: charger input only</text>
   <path d="M880 375 V400" class="supply"/>
   <rect x="750" y="400" width="280" height="120" class="box"/>
-  <text x="810" y="456" class="part">IP5310 / K648</text>
+  <text x="810" y="456" class="part">IP5306 / K648</text>
   <text x="810" y="480" class="small">charge only</text>
   <text x="765" y="424" class="small">BAT+</text>
   <text x="765" y="494" class="small">BAT-</text>
@@ -103,7 +103,7 @@
   </g>
   <g id="charger-sense">
   <text x="40" y="590" class="heading">1b. Charger-present sense (2N7000)</text>
-  <text x="50" y="655" class="small positive">IP5310 USB-C VBUS pad</text>
+  <text x="50" y="655" class="small positive">IP5306 USB-C VBUS pad</text>
   <path d="M50 695 H130 M190 695 H360" class="supply"/>
   <rect x="130" y="685" width="60" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="148" y="677" class="small">10k</text>
@@ -125,7 +125,7 @@
   <text x="535" y="604" class="small">100k</text>
   <text x="648" y="625" class="small">ESP32 3V3 only</text>
   <text x="190" y="625" class="small">GPIO35 (input only)</text>
-  <text x="760" y="640" class="small">VBUS = IP5310 USB-C input pad, not OUT+.</text>
+  <text x="760" y="640" class="small">VBUS = IP5306 USB-C input pad, not OUT+.</text>
   <text x="760" y="665" class="small">USB present: gate high, GPIO35 reads LOW.</text>
   <text x="760" y="690" class="small">Pull-up is to ESP32 3V3; GPIO35 has no internal pull.</text>
   <text x="760" y="715" class="small">Ground is protected P- / LOAD_GND.</text>
@@ -146,7 +146,7 @@
   <circle cx="1300" cy="765" r="3" class="dot"/>
   <path d="M1300 725 L1318 752" class="wire"/>
   <text x="1335" y="742" class="small">Momentary NO button</text>
-  <text x="1335" y="762" class="tiny warning">Not on IP5310 KEY</text>
+  <text x="1335" y="762" class="tiny warning">Not on IP5306 KEY</text>
   <text x="1315" y="784" class="small">LOAD_GND</text>
   </g>
   <g transform="translate(0 410)">
@@ -338,7 +338,7 @@
   <line x1="40" y1="1560" x2="1600" y2="1560" class="rule"/>
   <text x="40" y="1590" class="small">Identical net labels connect across panels; differently named nets remain separate unless a wire/component joins them. See PINOUT.md.</text>
   <text x="40" y="1615" class="small">Capacitor values joined by + mean parallel parts across the stated supply/return. Keep motor/amp/ring return currents out of ESP32 headers.</text>
-  <text x="40" y="1640" class="small warning">Charging input is shown at IP5310 only. Dual-USB operation is unverified. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
+  <text x="40" y="1640" class="small warning">Charging input is shown at IP5306 only. Dual-USB operation is unverified. Read WIRING.md and MANUAL_TESTS.md before assembly or probing.</text>
   <g aria-label="Signal and power wire color key">
     <path d="M40 1660 H58" class="signal white"/><text x="64" y="1665" class="tiny">CS/SS, LED data</text>
     <path d="M155 1660 H173" class="signal blue"/><text x="179" y="1665" class="tiny">clocks (SCK/BCLK)</text>

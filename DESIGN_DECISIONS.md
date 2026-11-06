@@ -2,9 +2,9 @@
 
 ## Scope and canonical project
 
-Keep the existing IP5310/K648, 6 V/50 RPM N20 and ESP32 DevKit V1. Battery-only
+Keep the existing IP5306/K648, 6 V/50 RPM N20 and ESP32 DevKit V1. Battery-only
 operation uses a TPS61088 JXL V1.10 set to 5 V, replacing XL6009, and a matched
-VTC5A 1S2P pack. IP5310 is charger-only with OUT unused. USB charging/programming handover and shared
+VTC5A 1S2P pack. IP5306 is charger-only with OUT unused. USB charging/programming handover and shared
 USB power are deliberately not part of the solder-ready baseline. The archived
 monolith and old KiCad diagrams are not maintained build inputs.
 
@@ -16,7 +16,7 @@ monolith and old KiCad diagrams are not maintained build inputs.
 - No mandatory series 1N5822 in the battery-only 5 V distribution: it wastes
   voltage headroom and does not provide complete two-source isolation.
 - SW_LOAD switches protected P+ to both TPS61088 IN+ and the ADC divider top.
-  IP5310 BAT stays connected upstream for charging while off. An output-only
+  IP5306 BAT stays connected upstream for charging while off. An output-only
   switch is unsuitable with a permanently connected battery ADC divider because
   it can back-power the ESP32. This is not an all-source USB cutoff.
 - No KEY pulses or KEY driver are used. No charger/load mux is implemented.
@@ -80,7 +80,7 @@ PowerControl reads calibrated ADC millivolts through a 100k/47k divider on ADC1
 GPIO34; a 100 nF filter and 16-sample average reduce noise. Player handles startup
 voltage checks, soft song inhibition with a bounded warning MP3, and deeper
 low-voltage shutdown. Soft inhibition is retained across normal deep sleep;
-charging recovery is not inferred from voltage rebound or IP5310 OUT. Thresholds and meter
+charging recovery is not inferred from voltage rebound or IP5306 OUT. Thresholds and meter
 calibration are in config.h; 3.6 V nominal is not a calibration reference or an
 accurate charge-percentage mapping. The decoder/SD/NFC calls can still block,
 so sampling is not a hard real-time safety mechanism. Failures leave loads

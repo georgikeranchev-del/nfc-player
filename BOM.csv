@@ -1,45 +1,45 @@
-Id,Quantity,Part,Status,Notes
-U_ESP32,1,ESP32 DevKit V1 WROOM-32,keep,Confirm classic WROOM without PSRAM
-U_POWER,1,IP5310 K648 module,keep,Charger only at PCM P+/P-; OUT pins unused; no GPIO KEY connection
-U_BOOST,1,TPS61088 JXL V1.10 DC-DC module,verify,Set to 5.00V before connecting loads; replace XL6009; verify board input range and UVLO; no EN control implemented
-BAT1,2,Murata/Sony US18650VTC5A Li-ion cell,keep,Matched parallel 1S2P pack; 3.6V nominal and 4.20V full pack voltage; shared suitable 1S PCM; see WIRING.md
-PROTECTION,1,Documented 1S PCM for the 1S2P pack,verify,Match cell chemistry and total pack charge/discharge limits; software sleep is not isolation
-F1,1,DC fuse and insulated holder,select,Near cell positive; current/time curve selected after measurement
-SW_LOAD,1,DC-rated SPST switch,verify,PCM P+ to switched boost input and divider top; charger stays unswitched; rate for battery current
-R_BAT_TOP,1,100k ohm 1% metal-film resistor 0.25W,buy,SW_BAT+ to GPIO34 ADC node; not raw cell positive or regulated 5V
-R_BAT_BOTTOM,1,47k ohm 1% metal-film resistor 0.25W,buy,GPIO34 ADC node to protected LOAD_GND
-C_BAT_FILTER,1,100nF X7R ceramic >=16V,buy,GPIO34 ADC node to LOAD_GND close to ESP32; separate from supply bypass caps
-Q_VBUS,1,2N7000 TO-92 N-MOSFET,buy,Charger-present sense only; check pin order (often S-G-D flat face); not a power switch
-R_VBUS_GATE,1,10k ohm resistor,buy,IP5310 USB VBUS to 2N7000 gate; never VBUS directly to a GPIO
-R_VBUS_PD,1,100k ohm resistor,buy,2N7000 gate to LOAD_GND
-R_VBUS_PULLUP,1,100k ohm resistor,buy,GPIO35 drain node to ESP32 3V3 only; GPIO35 has no internal pull
-SW_HELP,1,Momentary normally-open button (existing KEY button),keep,One lead to GPIO39 and the other to LOAD_GND; disconnect it from IP5310 KEY
-R_HELP_PULLUP,1,10k ohm resistor,buy,GPIO39 to ESP32 3V3 only; GPIO39 is input only with no internal pull
-U_SD,1,SD breakout and card,keep,Confirm module supply voltage and 3.3V SPI signals
-U_NFC,1,PN532 SPI breakout,keep,Verify power/logic requirements and SPI mode
-U_AMP,1,MAX98357A seven-pin module,keep,SD via AHCT buffer; no speaker terminal to ground
-SPK1,1,Mono speaker 4ohm 3W,keep,User-confirmed rating; avoid sustained clipping; neither terminal to ground
-ENC1,1,Incremental encoder with NO push,keep,GPIO4 push switch to GND; normal sleep wake only; no KEY connection
-LED1,1,24-pixel WS2812B ring,keep,5V and buffered data
-U_BUFFER,1,SN74AHCT125N DIP-14,buy,One channel LED data and one amp SD; not HC125
-R_LED_DATA,1,330 ohm resistor,keep,Between AHCT output and ring DIN
-R_LED_PD,1,10k resistor,buy,AHCT channel 1 input to ground
-R_AMP_PD,1,10k resistor,buy,AHCT channel 2 input to ground for reset mute
-U_GATE,1,TC4420CPA DIP-8,buy,Non-inverting 5V MOSFET driver; confirm exact package
-R_DRIVER_PD,1,10k resistor,buy,TC4420 input to ground
-Q_MOTOR,1,IRLZ44N TO-220,keep,Gate driven at 5V; tab is drain
-R_GATE,1,100 ohm resistor,keep,Driver output to motor gate
-R_GATE_PD,1,10k resistor,keep,Physically between MOSFET gate and source
-D_MOTOR,1,1N5822 axial Schottky,buy,Motor flyback band toward motor positive; verify current and heat
-M1,1,N20 6V 50RPM motor,keep,Two-wire PWM control; use actual current data
-C_POWER,1,1000uF electrolytic >=10V,verify,TPS61088 5V output; confirm allowed capacitance and startup inrush before retaining
-C_AMP,1,100uF electrolytic >=10V,keep,Local amplifier supply
-C_LED,1,470uF electrolytic >=10V,keep,Local LED supply
-C_MOTOR,1,220uF electrolytic >=10V,keep,Motor supply to ground NOT drain
-C_BYPASS,7,100nF X7R ceramic >=16V,buy,Power output ESP32 amp LED AHCT driver and spare
-C_DRIVER,1,1uF ceramic >=16V,buy,Local TC4420 supply
-C_BRUSH,1,100nF capacitor >=16V,verify,Across motor brushes; identified film part acceptable
-SOCKET8,1,DIP-8 socket,buy,For TC4420
-SOCKET14,1,DIP-14 socket,buy,For AHCT125
-PERFBOARD,1,Perfboard with insulated mounting,buy,Size after physical layout
-WIRING_KIT,1,Rated wire connectors headers heatshrink standoffs,buy,Power-current paths not thin jumper wires or tiny pad chains
+Id,Quantity,Part,Purchase status,Notes
+U_ESP32,1,ESP32 DevKit V1 WROOM-32,bought,Confirm classic WROOM without PSRAM
+U_POWER,1,IP5306 K648 module,bought,Confirm chip marking and module pinout; charger only at PCM P+/P-; OUT pins unused; no GPIO KEY connection
+U_BOOST,1,TPS61088 JXL V1.10 DC-DC module,bought,Set to 5.00V before connecting loads; replace XL6009; verify board input range and UVLO; no EN control implemented
+BAT1,2,Murata/Sony US18650VTC5A Li-ion cell,bought,Matched parallel 1S2P pack; 3.6V nominal and 4.20V full pack voltage; shared suitable 1S PCM; see WIRING.md
+PROTECTION,1,Documented 1S PCM for the 1S2P pack,bought,Match cell chemistry and total pack charge/discharge limits; software sleep is not isolation
+F1,1,DC fuse and insulated holder,bought,Near cell positive; current/time curve selected after measurement
+SW_LOAD,1,DC-rated SPST switch,bought,PCM P+ to switched boost input and divider top; charger stays unswitched; rate for battery current
+R_BAT_TOP,1,100k ohm 1% metal-film resistor 0.25W,bought,SW_BAT+ to GPIO34 ADC node; not raw cell positive or regulated 5V
+R_BAT_BOTTOM,1,47k ohm 1% metal-film resistor 0.25W,bought,GPIO34 ADC node to protected LOAD_GND
+C_BAT_FILTER,1,100nF X7R ceramic >=16V,bought,GPIO34 ADC node to LOAD_GND close to ESP32; separate from supply bypass caps
+Q_VBUS,1,2N7000 TO-92 N-MOSFET,bought,Charger-present sense only; check pin order (often S-G-D flat face); not a power switch
+R_VBUS_GATE,1,10k ohm resistor,bought,IP5306 USB VBUS to 2N7000 gate; never VBUS directly to a GPIO
+R_VBUS_PD,1,100k ohm resistor,bought,2N7000 gate to LOAD_GND
+R_VBUS_PULLUP,1,100k ohm resistor,bought,GPIO35 drain node to ESP32 3V3 only; GPIO35 has no internal pull
+SW_HELP,1,Momentary normally-open button (existing KEY button),bought,One lead to GPIO39 and the other to LOAD_GND; disconnect it from IP5306 KEY
+R_HELP_PULLUP,1,10k ohm resistor,bought,GPIO39 to ESP32 3V3 only; GPIO39 is input only with no internal pull
+U_SD,1,SD breakout and card,bought,Confirm module supply voltage and 3.3V SPI signals
+U_NFC,1,PN532 SPI breakout,bought,Verify power/logic requirements and SPI mode
+U_AMP,1,MAX98357A seven-pin module,bought,SD via AHCT buffer; no speaker terminal to ground
+SPK1,1,Mono speaker 4ohm 3W,bought,User-confirmed rating; avoid sustained clipping; neither terminal to ground
+ENC1,1,Incremental encoder with NO push,bought,GPIO4 push switch to GND; normal sleep wake only; no KEY connection
+LED1,1,24-pixel WS2812B ring,bought,5V and buffered data
+U_BUFFER,1,SN74AHCT125N DIP-14,bought,One channel LED data and one amp SD; not HC125
+R_LED_DATA,1,330 ohm resistor,bought,Between AHCT output and ring DIN
+R_LED_PD,1,10k resistor,bought,AHCT channel 1 input to ground
+R_AMP_PD,1,10k resistor,bought,AHCT channel 2 input to ground for reset mute
+U_GATE,1,TC4420CPA DIP-8,bought,Non-inverting 5V MOSFET driver; confirm exact package
+R_DRIVER_PD,1,10k resistor,bought,TC4420 input to ground
+Q_MOTOR,1,IRLZ44N TO-220,bought,Gate driven at 5V; tab is drain
+R_GATE,1,100 ohm resistor,bought,Driver output to motor gate
+R_GATE_PD,1,10k resistor,bought,Physically between MOSFET gate and source
+D_MOTOR,1,1N5822 axial Schottky,bought,Motor flyback band toward motor positive; verify current and heat
+M1,1,N20 6V 50RPM motor,bought,Two-wire PWM control; use actual current data
+C_POWER,1,1000uF electrolytic >=10V,bought,TPS61088 5V output; confirm allowed capacitance and startup inrush before retaining
+C_AMP,1,100uF electrolytic >=10V,bought,Local amplifier supply
+C_LED,1,470uF electrolytic >=10V,bought,Local LED supply
+C_MOTOR,1,220uF electrolytic >=10V,bought,Motor supply to ground NOT drain
+C_BYPASS,7,100nF X7R ceramic >=16V,bought,Power output ESP32 amp LED AHCT driver and spare
+C_DRIVER,1,1uF ceramic >=16V,bought,Local TC4420 supply
+C_BRUSH,1,100nF capacitor >=16V,bought,Across motor brushes; identified film part acceptable
+SOCKET8,1,DIP-8 socket,bought,For TC4420
+SOCKET14,1,DIP-14 socket,bought,For AHCT125
+PERFBOARD,1,Perfboard with insulated mounting,bought,Size after physical layout
+WIRING_KIT,1,Rated wire connectors headers heatshrink standoffs,bought,Power-current paths not thin jumper wires or tiny pad chains

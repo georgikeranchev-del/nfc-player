@@ -1,10 +1,10 @@
 # Battery-Only Perfboard Wiring
 
 This is the new baseline, superseding contradictory advice in the old chat and
-parent wiring file. Keep the existing classic ESP32 development board, IP5310/K648,
+parent wiring file. Keep the existing classic ESP32 development board, IP5306/K648,
 PN532, SD module, MAX98357A, ring, N20 motor and encoder. Reuse their existing
 capacitors if identified and undamaged. The selected load supply is now a
-**TPS61088 JXL V1.10 module set to 5.00 V**, replacing the XL6009. IP5310 is used
+**TPS61088 JXL V1.10 module set to 5.00 V**, replacing the XL6009. IP5306 is used
 only for charging; its OUT pins do not feed the player. The battery is two matched
 VTC5A cells in parallel (1S2P), with suitable 1S protection and a coordinated fuse.
 
@@ -50,7 +50,7 @@ bypassing battery protection or joining raw B- to system GND.
   and a DC-rated SPST load switch if you want physical off. Use mounting support
   for the encoder; do not support the box/knob by solder joints alone.
 - Keep the existing encoder. Its push switch wakes normal powered sleep;
-  cold-start uses the load switch, not IP5310 KEY.
+  cold-start uses the load switch, not IP5306 KEY.
 
 Exact inventory and quantities are in [BOM.csv](BOM.csv). A gate driver and logic
 buffer do not solve boost overload, poor wiring, inappropriate battery selection,
@@ -108,13 +108,13 @@ that isolation; disconnecting only VIN while leaving GPIOs connected is not enou
 ```text
 1S2P VTC5A pack + -- F1 (near pack +) -- PCM B+
 1S2P VTC5A pack - -------------------- PCM B-
-PCM P+ --+---------------------------- IP5310 BAT+ (charger only)
+PCM P+ --+---------------------------- IP5306 BAT+ (charger only)
          +-- SW_LOAD -- SW_BAT+ --+---- TPS61088 IN+
                                 +---- battery divider top (100k)
-PCM P- ------------------------------ IP5310 BAT-, TPS61088 IN-/OUT-, LOAD_GND
+PCM P- ------------------------------ IP5306 BAT-, TPS61088 IN-/OUT-, LOAD_GND
 
 TPS61088 OUT+ (set to 5.00 V) --------- LOAD_5V star
-IP5310 OUT+ and OUT-: no external load connection
+IP5306 OUT+ and OUT-: no external load connection
 
 LOAD_5V -> ESP32 VIN/5V, amp VIN, ring 5V, motor +, AHCT125 VCC, TC4420 VDD
 LOAD_GND -> all module returns, MOSFET source, driver/buffer GND, divider return
@@ -128,13 +128,13 @@ Fuse coordination must allow expected transients but protect the weakest wire
 and cell limits. Do not intentionally short a lithium cell to test protection.
 
 **Move SW_LOAD from the old 5 V output position to the protected battery branch
-feeding BOTH TPS61088 IN+ and the divider.** The IP5310 BAT connection stays
+feeding BOTH TPS61088 IN+ and the divider.** The IP5306 BAT connection stays
 upstream of this switch, so charging remains possible with the player off.
 Rate the switch for battery-side current, which can exceed the 5 V load current.
 An output-only switch would leave the divider driving an unpowered ESP32.
 Disconnect the ADC lead too whenever removing just the ESP32's power.
 
-IP5310 BAT+/BAT- means its cell terminals (sometimes marked IN+/IN-), not its
+IP5306 BAT+/BAT- means its cell terminals (sometimes marked IN+/IN-), not its
 USB 5 V input. Confirm the TPS61088 module has a common IN-/OUT- return with all
 power removed. Keep both USB cables unplugged for battery-only tests. No source
 mux, CC1/CC2 detection or converter EN control is implemented.
@@ -143,7 +143,7 @@ SW_LOAD open (`0`) leaves the charger connected to the protected pack; closed
 (`1`) allows both the player and charger to use that port. With USB connected,
 the pack can charge, remain approximately neutral or discharge depending on net
 current. This is not a validated load-sharing/charge-termination circuit; test
-both charge completion and net cell current with playback. IP5310 OUT is not a
+both charge completion and net cell current with playback. IP5306 OUT is not a
 charger-present signal because it can also be battery-powered.
 
 On the schematic, only repeated instances of the SAME net label connect.
@@ -232,7 +232,7 @@ measurements. A heatsink or quieter audio cannot correct over-discharge.
 ### Charger-present sense
 
 ```text
-IP5310 USB-C VBUS pad --10k-- +-- 2N7000 gate (G)
+IP5306 USB-C VBUS pad --10k-- +-- 2N7000 gate (G)
                               |
                               100k to LOAD_GND
 
@@ -240,7 +240,7 @@ ESP32 3V3 --100k-- +-- 2N7000 drain (D) -- GPIO35 (input only)
 2N7000 source (S) -- LOAD_GND
 ```
 
-Take VBUS from the IP5310 module's USB input (connector VBUS pin or input pad),
+Take VBUS from the IP5306 module's USB input (connector VBUS pin or input pad),
 not OUT+, which can also be battery-powered. That module's ground is the protected
 P-/LOAD_GND. USB present puts about 4.5 V on the gate and GPIO35 reads LOW. This
 only senses USB power: it does not switch any load, and it does not prove the
@@ -282,15 +282,15 @@ not expected startup behavior. Keep the load off until the cause is understood.
 The diagram above applies to a **documented 1S, 4.20 V Li-ion, common-port PCM**:
 the same protected P+/P- port carries discharge and later charge current. It is
 not a pin-position guide for an unidentified board. The PCM protects the pack;
-IP5310 charges it and TPS61088 supplies the player. A 2S/3S PCM is not suitable.
+IP5306 charges it and TPS61088 supplies the player. A 2S/3S PCM is not suitable.
 
 For the matched parallel pack, the electrical connections are:
 
 ```text
 Pack + --> F1 close to pack + --> PCM B+
 Pack - ------------------------> PCM B-
-PCM P+ ------------------------> IP5310 BAT+ and SW_LOAD input
-PCM P- ------------------------> IP5310 BAT- and protected system return
+PCM P+ ------------------------> IP5306 BAT+ and SW_LOAD input
+PCM P- ------------------------> IP5306 BAT- and protected system return
 ```
 
 All player grounds stay on the protected side. Do not connect holder - directly
@@ -325,7 +325,7 @@ general checks below still apply to this 1S2P pack and the actual K648 charger.
 |---|---|
 | Chemistry/voltage | Conventional rechargeable Li-ion, nominal 3.6/3.7 V, charged to 4.20 V. Verify K648 is configured for that cell. LiFePO4 or a different charge-voltage chemistry is not a drop-in substitute. |
 | Capacity | Genuine 2500-3500 mAh is a practical shopping range; around 3000 mAh is a useful starting point. Capacity mainly determines runtime, not whether motor startup succeeds. |
-| Discharge rating | Prefer a documented continuous discharge rating of at least 10 A as a shopping target with margin; ignore unqualified "pulse/max" marketing. Final suitability depends on measured current, sag and temperature. This is not a 10 A fuse recommendation or an IP5310 output rating. |
+| Discharge rating | Prefer a documented continuous discharge rating of at least 10 A as a shopping target with margin; ignore unqualified "pulse/max" marketing. Final suitability depends on measured current, sag and temperature. This is not a 10 A fuse recommendation or an IP5306 output rating. |
 | Charge rating | Check the cell's recommended and maximum charge current separately from its discharge rating. The actual K648 cell-charging current must comply; USB input current is not the same measurement. If incompatible, reconfigure only by the module's documented method or select a compatible cell before charging. |
 | Protection | Use a documented protected cell/pack OR a suitable external 1S PCM. Its charge/discharge limits, trip thresholds and wiring must suit the cell and measured startup current. A high-current bare cell behind a low-current protection board is still limited by that board. |
 | Construction | Buy from a reputable battery supplier with a manufacturer datasheet and traceable model. Reject damaged wraps/positive-terminal insulators, dents and unknown salvaged cells. Avoid implausible capacity claims. |
@@ -382,8 +382,8 @@ appropriate pack/inter-cell fault protection and documented output/charge rating
 Use the protected output for the charger and switched player branch:
 
 ```text
-Protected 1S2P pack + --> coordinated fuse --> IP5310 BAT+ and SW_LOAD input
-Protected 1S2P pack - ----------------------> IP5310 BAT- and LOAD_GND
+Protected 1S2P pack + --> coordinated fuse --> IP5306 BAT+ and SW_LOAD input
+Protected 1S2P pack - ----------------------> IP5306 BAT- and LOAD_GND
 ```
 
 Fuse placement/rating must follow the pack design; its internal protected cells
@@ -578,9 +578,9 @@ ESP32 3V3 --10k-- +-- GPIO39 (input only)
 existing NO button --- LOAD_GND
 ```
 
-Reuse the existing momentary button, but move it from the IP5310 KEY pad: one
+Reuse the existing momentary button, but move it from the IP5306 KEY pad: one
 lead to GPIO39 and the other to LOAD_GND, with a 10k pull-up to ESP32 3V3.
-IP5310 KEY can sit above 3.3 V, so it must never share a node with the GPIO.
+IP5306 KEY can sit above 3.3 V, so it must never share a node with the GPIO.
 GPIO39 has no internal pull-up, so the resistor is required. GPIO36 is the other
 free input-only pin. A spare 100 nF ceramic from GPIO39 to GND is optional;
 Espressif documents glitches on GPIO36/39 in some ADC and sleep cases, and the

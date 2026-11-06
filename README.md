@@ -79,7 +79,7 @@ voltage it plays the low-battery warning instead. Supply the file yourself; a
 missing file is reported on serial and plays nothing. See
 [WIRING.md](WIRING.md#help-button).
 
-Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5310 is
+Power is now TPS61088 JXL V1.10 at 5 V from a protected VTC5A 1S2P pack; IP5306 is
 charger-only with its OUT unused. **Wire and calibrate the GPIO34 battery divider
 before running this firmware.** See [WIRING.md](WIRING.md#battery-voltage-divider).
 New songs require at least 3.50 V. Below that, a tag presentation plays
@@ -93,7 +93,7 @@ failed warning audio never permits the requested song to play.
 Startup at/below 3.30 V, <=3.30 V for 2 s while running, or <=3.00 V on a sample
 stops loads and sleeps without button wake. Switch off, recharge and power-cycle.
 Soft inhibition survives normal deep-sleep wake; voltage rebound alone does not
-clear it. Songs are re-enabled only when the 2N7000 sense (GPIO35) reports IP5310
+clear it. Songs are re-enabled only when the 2N7000 sense (GPIO35) reports IP5306
 USB VBUS present and the pack reads at least 3.70 V for 30 s. Hard low-battery
 sleep then wakes on charger insertion, or polls every 30 s while it stays plugged
 in. Unverified until bench-tested; see [WIRING.md](WIRING.md#charger-present-sense).
@@ -111,7 +111,7 @@ when low-battery-inhibited), NFC
 polling continues, and battery voltage is sampled every 250 ms while awake.
 This is lower-load operation, not zero current or disconnected peripheral power.
 After five minutes without activity, the firmware enters normal button-wake sleep.
-There are no IP5310 KEY pulses; GPIO17 is unused.
+There are no IP5306 KEY pulses; GPIO17 is unused.
 
 The firmware has no separate USB mode that disables idle sleep. **No tag does
 not make simultaneous boost VIN and DevKit USB safe.** For programming, disconnect

@@ -107,16 +107,16 @@ use the specified tolerance or verify with a known safe current and voltage.
 ### Battery-side connection for a grounded scope
 
 The following assumes the TPS61088 module has a verified common IN-/OUT- return.
-Check that with all power disconnected; do not bridge unknown terminals. IP5310
+Check that with all power disconnected; do not bridge unknown terminals. IP5306
 OUT is unused. For an externally protected pack, P- below is the
 PCM's protected output, NOT raw cell negative/B-. For a protected battery pack,
 use its documented protected output terminals. Keep the existing fuse/protection.
 
 ```text
-Fused/protected 1S source P+ --+-----------------------> IP5310 BAT+
+Fused/protected 1S source P+ --+-----------------------> IP5306 BAT+
                              +-- SW_LOAD --> SW_BAT+ -> TPS61088 IN+ and divider top
 
-Protected P- ----o----[ R_SHUNT = 0.010 ohm ]----o------> IP5310 BAT-
+Protected P- ----o----[ R_SHUNT = 0.010 ohm ]----o------> IP5306 BAT-
                 |                              |         TPS61088 IN-/OUT-/system GND
             CH1 probe tip                 ALL scope ground clips
                                           All player grounds stay here
@@ -199,7 +199,7 @@ tests; those need a separately reviewed measurement connection.
 1. Place modules/socket footprints on a 200 x 150 mm cardboard layout including
    mounting holes, motor/belt plane, speaker, battery and wire clearance. Keep
    PN532 antenna away from metal/battery/motor; test tag reading through the lid.
-2. Build only protected pack/IP5310/TPS61088/switch/star distribution first. Check
+2. Build only protected pack/IP5306/TPS61088/switch/star distribution first. Check
    polarity, shorts and unloaded output before fitting expensive boards.
 3. Test TPS61088 with a known dummy load and SW_LOAD. Stable 5 V must exist without any
    ESP32 firmware. Reject excess voltage, unexpected cycling or heat.
@@ -389,7 +389,7 @@ and NFC delays. A 2 s motor ramp therefore cannot meet a 2 s total startup targe
 | B7 | Test 1.5 s hold/release sleep and 5-minute idle sleep. Observe rails/current for at least 60 s, then wake by encoder with a healthy pack. | Motor/amp off, LEDs black; normal encoder wake works while powered. Measure remaining draw; do not assume TPS61088 turns off. SW_LOAD must remove boost and divider input together. |
 | B8 | Perform the battery ADC calibration and cutoff procedure above with a substitute supply, not by over-discharging cells. | Verified voltage accuracy, startup refusal, dip filtering, shutdown and no button wake in low-battery sleep. Record residual current and switch off afterward. |
 | B9 | Perform the soft inhibition/warning test above. | One bounded warning per new request; no motor, song replay or voltage-rebound unlock. Missing warning remains fail-closed. |
-| B10 | Move the existing button from IP5310 KEY to GPIO39 and LOAD_GND with a 10k pull-up to 3V3, remove the transistor circuit from GPIO17, and put `/player/help.mp3` on the SD card. Press while idle, during help, during a song, with a tag present, and with the file removed. Hold it while powering on. | Help plays at the set volume with the motor off; a second press stops it; a tag stops it and starts that song; presses during songs do nothing; a missing file only logs; a button held at power-on does nothing until released. Check GPIO39 reads HIGH idle and LOW pressed, and that there is no 5 V on it. |
+| B10 | Move the existing button from IP5306 KEY to GPIO39 and LOAD_GND with a 10k pull-up to 3V3, remove the transistor circuit from GPIO17, and put `/player/help.mp3` on the SD card. Press while idle, during help, during a song, with a tag present, and with the file removed. Hold it while powering on. | Help plays at the set volume with the motor off; a second press stops it; a tag stops it and starts that song; presses during songs do nothing; a missing file only logs; a button held at power-on does nothing until released. Check GPIO39 reads HIGH idle and LOW pressed, and that there is no 5 V on it. |
 
 For B3/B4 only, set `INITIAL_VOLUME = 0`, `LED_BRIGHTNESS = 0` AND
 `LED_START_BRIGHTNESS = 0` in the test image. Both LED values must be zero to pass
@@ -435,4 +435,4 @@ Input power must cover the player, charging and conversion losses. A weak source
 poor cable or unsuitable module power path can leave the cell discharging despite
 a charging indicator. Near full charge, tapering to zero is normal; assess net
 charging with a partly discharged cell as well. Do not infer pass-through quality
-or safe dual-USB operation from the IP5310 chip name alone.
+or safe dual-USB operation from the IP5306 chip name alone.

@@ -68,7 +68,7 @@
   <text x="932" y="309" class="small">USB side port</text>
 
   <rect x="615" y="374" width="225" height="78" rx="8" class="power"/>
-  <text x="727" y="401" text-anchor="middle" class="label">IP5310 / K648</text>
+  <text x="727" y="401" text-anchor="middle" class="label">IP5306 / K648</text>
   <text x="727" y="423" text-anchor="middle" class="small">load switch + power distribution</text>
   <path d="M840 414 H890" stroke="#ad6c35" stroke-width="3"/>
   <rect x="890" y="401" width="30" height="26" rx="4" fill="#fff0e2" stroke="#ad6c35" stroke-width="2"/>

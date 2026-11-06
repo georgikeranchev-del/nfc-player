@@ -3,7 +3,7 @@
 ## Start and wake paths
 
 **Load switch open:** close SW_LOAD to power TPS61088 and the battery divider
-from protected P+. A stable 5 V rail cold-boots the ESP32. The IP5310 is charger
+from protected P+. A stable 5 V rail cold-boots the ESP32. The IP5306 is charger
 only; its OUT pins and KEY are not in the player power/wake path. Capacitor/boost
 startup and the ESP32 ROM occur BEFORE the timing below.
 
