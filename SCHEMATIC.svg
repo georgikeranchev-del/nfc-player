@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="2090" viewBox="0 0 1640 2090" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="2490" viewBox="0 0 1640 2490" role="img" aria-labelledby="title desc">
   <title id="title">NFC player power and connection drawing</title>
-  <desc id="desc">Functional wiring reference for the TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor and four-ohm three-watt speaker. A protected VTC5A 1S2P pack feeds a TPS61088 JXL V1.10 set to 5 V. The load switch disconnects both converter input and the GPIO34 battery divider. IP5306 is charger-only on the unswitched protected pack; OUT pins are unused and there is no KEY driver. Named supply nets connect across panels. This is not a verified clone-module schematic or a hardware low-voltage disconnect.</desc>
+  <desc id="desc">Functional wiring reference for the TC4420CPA and SN74AHCT125N, ESP32, SD, PN532, encoder, LED ring, N20 motor and four-ohm three-watt speaker. A protected VTC5A 1S2P pack feeds a TPS61088 JXL V1.10 set to 5 V. The load switch disconnects both converter input and the GPIO34 battery divider. A GPIO17-driven AO3401A P-MOSFET switches the peripheral 5 V rail SW_5V while the ESP32 stays on LOAD_5V. IP5306 is charger-only on the unswitched protected pack; OUT pins are unused and there is no KEY driver. Named supply nets connect across panels. This is not a verified clone-module schematic or a hardware low-voltage disconnect.</desc>
   <defs>
     <style>
       text { font-family: "Segoe UI", sans-serif; font-size: 16px; fill: #20262b; letter-spacing: 0; }
@@ -28,7 +28,7 @@
       .dot { fill: #000000; }
     </style>
   </defs>
-  <rect width="1640" height="2090" fill="white"/>
+  <rect width="1640" height="2490" fill="white"/>
   <text x="40" y="45" class="title">NFC Player: Power and Connection Drawing</text>
   <text x="40" y="75">TC4420CPA + SN74AHCT125N | GPIO numbers, not physical DevKit header positions | 4 ohm / 3 W mono speaker</text>
   <text x="40" y="101" class="small warning">Functional reference, not an electrically verified module schematic. Confirm breakout supply voltages and exact package pinouts.</text>
@@ -72,8 +72,9 @@
   <path d="M1240 290 H1290" class="wire"/>
   <rect x="1290" y="180" width="290" height="140" class="box"/>
   <text x="1308" y="212" class="part">LOAD_5V star</text>
-  <text x="1308" y="242" class="small">Separate load branches</text>
+  <text x="1308" y="242" class="small">ESP32 VIN + Q_PSW source only</text>
   <text x="1308" y="294" class="part">LOAD_GND star</text>
+  <text x="1290" y="345" class="small">Peripheral switch Q_PSW to SW_5V: panel 1c.</text>
   <text x="1045" y="345" class="small">Check 1000 uF + 100 nF at output;</text>
   <text x="1045" y="367" class="small">verify JXL startup/inrush and allowable capacitance.</text>
   <text x="50" y="350" class="small warning">Never join raw B- to system GND around the protection.</text>
@@ -149,7 +150,103 @@
   <text x="1335" y="762" class="tiny warning">Not on IP5306 KEY</text>
   <text x="1315" y="784" class="small">LOAD_GND</text>
   </g>
-  <g transform="translate(0 410)">
+  <g id="peripheral-switch">
+  <text x="40" y="835" class="heading">1c. Peripheral 5 V switch (GPIO17, high-side P-MOSFET)</text>
+  <path d="M60 900 H440" class="supply"/>
+  <text x="60" y="888" class="small positive">LOAD_5V (from TPS61088 OUT+, always on)</text>
+  <circle cx="110" cy="900" r="3" class="dot"/>
+  <path d="M110 900 V925" class="supply"/>
+  <rect x="60" y="925" width="170" height="80" class="box"/>
+  <text x="70" y="948" class="part">ESP32 DevKit</text>
+  <text x="70" y="970" class="small">VIN/5V: always on</text>
+  <text x="70" y="990" class="small">GPIO4 wakes it</text>
+
+  <circle cx="290" cy="900" r="3" class="dot"/>
+  <path d="M290 900 V938 M276 938 H304 M276 946 H304 M290 946 V990 H388" class="supply"/>
+  <text x="270" y="947" class="small" text-anchor="end">100nF</text>
+  <circle cx="340" cy="900" r="3" class="dot"/>
+  <path d="M340 900 V918 M340 954 V990" class="supply"/>
+  <rect x="332" y="918" width="16" height="36" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="356" y="941" class="small">100k</text>
+  <circle cx="340" cy="990" r="3" class="dot"/>
+  <circle cx="370" cy="990" r="3" class="dot"/>
+  <path d="M370 990 V1004 M370 1040 V1061 H340" class="supply"/>
+  <rect x="362" y="1004" width="16" height="36" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="356" y="1027" class="small" text-anchor="end">10k</text>
+
+  <path d="M388 950 V1030 M400 950 V968 M400 982 V998 M400 1012 V1030" class="wire"/>
+  <path d="M400 959 H440 M400 990 H440" class="wire"/>
+  <polygon points="420,990 410,985 410,995" fill="#000000"/>
+  <path d="M440 900 V990" class="supply"/>
+  <circle cx="440" cy="900" r="3" class="dot"/>
+  <circle cx="440" cy="959" r="3" class="dot"/>
+  <path d="M400 1021 H1150" class="supply"/>
+  <text x="460" y="940" class="part">Q_PSW</text>
+  <text x="460" y="962" class="small">AO3401A (SOT-23 breakout)</text>
+  <text x="460" y="984" class="tiny">S up = LOAD_5V, D down = SW_5V</text>
+  <text x="560" y="1010" class="small positive">SW_5V (switched)</text>
+
+  <path d="M328 1052 V1128 M340 1052 V1070 M340 1082 V1098 M340 1110 V1128" class="wire"/>
+  <path d="M340 1090 H358 V1119 M340 1119 H370 V1160" class="wire"/>
+  <polygon points="344,1090 352,1085 352,1095" fill="#000000"/>
+  <circle cx="358" cy="1119" r="3" class="dot"/>
+  <text x="385" y="1088" class="small">Q_PSW_DRV</text>
+  <text x="385" y="1106" class="small">2N7000</text>
+  <path d="M150 1005 V1090 H328" class="signal green"/>
+  <text x="160" y="1082" class="small">GPIO17</text>
+  <circle cx="260" cy="1090" r="3" class="dot"/>
+  <path d="M260 1090 V1108 M260 1144 V1160" class="wire"/>
+  <rect x="252" y="1108" width="16" height="36" fill="white" stroke="#26343c" stroke-width="2"/>
+  <text x="276" y="1131" class="small">100k</text>
+  <path d="M60 1160 H1150" class="wire"/>
+  <circle cx="260" cy="1160" r="3" class="dot"/>
+  <circle cx="370" cy="1160" r="3" class="dot"/>
+  <text x="60" y="1182" class="small">LOAD_GND</text>
+
+  <path d="M560 1021 V1055 M695 1021 V1055 M840 1021 V1055 M975 1021 V1055 M1090 1021 V1055" class="supply"/>
+  <path d="M560 1125 V1160 M695 1125 V1160 M840 1125 V1160 M975 1125 V1160 M1090 1125 V1160" class="wire"/>
+  <circle cx="560" cy="1021" r="3" class="dot"/>
+  <circle cx="695" cy="1021" r="3" class="dot"/>
+  <circle cx="840" cy="1021" r="3" class="dot"/>
+  <circle cx="975" cy="1021" r="3" class="dot"/>
+  <circle cx="1090" cy="1021" r="3" class="dot"/>
+  <circle cx="560" cy="1160" r="3" class="dot"/>
+  <circle cx="695" cy="1160" r="3" class="dot"/>
+  <circle cx="840" cy="1160" r="3" class="dot"/>
+  <circle cx="975" cy="1160" r="3" class="dot"/>
+  <circle cx="1090" cy="1160" r="3" class="dot"/>
+  <rect x="500" y="1055" width="120" height="70" class="box"/>
+  <text x="512" y="1082" class="small">MAX98357A</text>
+  <text x="512" y="1104" class="small">amp VIN</text>
+  <rect x="635" y="1055" width="120" height="70" class="box"/>
+  <text x="647" y="1082" class="small">LED ring 5V</text>
+  <text x="647" y="1104" class="small">+ 470 uF</text>
+  <rect x="770" y="1055" width="140" height="70" class="box"/>
+  <text x="782" y="1082" class="small">AHCT125 VCC</text>
+  <text x="782" y="1104" class="small">TC4420 VDD</text>
+  <rect x="925" y="1055" width="100" height="70" class="box"/>
+  <text x="937" y="1082" class="small">Motor +</text>
+  <text x="937" y="1104" class="small">+ 220 uF</text>
+  <rect x="1040" y="1055" width="100" height="70" class="box"/>
+  <text x="1052" y="1082" class="small">SD + PN532</text>
+  <text x="1052" y="1104" class="small">supply</text>
+
+  <text x="1180" y="870" class="part">How it works</text>
+  <text x="1180" y="896" class="small">GPIO17 HIGH: 2N7000 on, gate pulled to ~0 V,</text>
+  <text x="1180" y="918" class="small">Q_PSW on (Vgs about -4.5 V), SW_5V powered.</text>
+  <text x="1180" y="944" class="small">GPIO17 LOW/floating (reset, deep sleep): the 100k</text>
+  <text x="1180" y="966" class="small">pulldown holds 2N7000 off; 100k to source keeps</text>
+  <text x="1180" y="988" class="small">Q_PSW off, so SW_5V is dead.</text>
+  <text x="1180" y="1014" class="small">10k + 100nF at the gate: a few ms turn-on,</text>
+  <text x="1180" y="1036" class="small">limits inrush into the SW_5V capacitors.</text>
+  <text x="1180" y="1062" class="small">Source on LOAD_5V: body diode points at</text>
+  <text x="1180" y="1084" class="small">LOAD_5V, so it cannot feed SW_5V when off.</text>
+  <text x="1180" y="1110" class="small warning">Firmware: rail ON only after a safe battery</text>
+  <text x="1180" y="1132" class="small warning">reading; OFF before deep sleep.</text>
+  <text x="1180" y="1158" class="small">Power SD/PN532 from SW_5V, not ESP32 3V3.</text>
+  <line x1="40" y1="1195" x2="1600" y2="1195" class="rule"/>
+  </g>
+  <g transform="translate(0 810)">
   <text x="40" y="425" class="heading">2. ESP32, storage, NFC and encoder</text>
   <rect x="60" y="455" width="220" height="365" class="box"/>
   <text x="80" y="490" class="part">Classic ESP32</text>
@@ -165,7 +262,7 @@
 
   <rect x="560" y="455" width="240" height="110" class="box"/>
   <text x="580" y="486" class="part">SD module</text>
-  <text x="580" y="514" class="small">Supply: check breakout</text>
+  <text x="580" y="514" class="small">Supply: SW_5V via breakout</text>
   <text x="580" y="542" class="small">GND: LOAD_GND</text>
   <path d="M280 512 H560" class="signal white"/>
   <path d="M280 520 H560" class="signal blue"/>
@@ -176,7 +273,7 @@
 
   <rect x="560" y="600" width="240" height="110" class="box"/>
   <text x="580" y="631" class="part">PN532 in SPI mode</text>
-  <text x="580" y="659" class="small">Supply: check breakout</text>
+  <text x="580" y="659" class="small">Supply: SW_5V via breakout</text>
   <text x="580" y="687" class="small">GND: LOAD_GND</text>
   <path d="M280 657 H560" class="signal white"/>
   <path d="M280 665 H560" class="signal blue"/>
@@ -198,7 +295,7 @@
   <text x="870" y="484" class="small">Solder-side view is mirrored.</text>
   <text x="870" y="576" class="small">TC4420: bridge 1+8, 4+5, 6+7 separately.</text>
   <text x="870" y="598" class="small">Pin 3: NC; leave open.</text>
-  <text x="1345" y="458" class="small">LOAD_5V</text>
+  <text x="1345" y="458" class="small">SW_5V</text>
   <path d="M1390 465 V478 M1390 465 H1540 V505 M1390 465 H1290 V498" class="supply"/>
   <circle cx="1390" cy="510" r="32" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="1380" y="517" class="part">M</text>
@@ -213,7 +310,7 @@
   <text x="1180" y="535" class="small">across brushes</text>
 
   <g id="motor-bulk-capacitor">
-    <title>220 uF motor rail capacitor: positive to LOAD_5V, negative to LOAD_GND, not motor drain.</title>
+    <title>220 uF motor rail capacitor: positive to SW_5V, negative to LOAD_GND, not motor drain.</title>
     <path d="M1540 465 H1580 V666" class="supply"/>
     <path d="M1562 666 H1598 M1562 674 H1598" class="wire"/>
     <path d="M1580 674 V785 H1390" class="wire"/>
@@ -227,7 +324,7 @@
 
   <rect x="905" y="635" width="205" height="92" class="box"/>
   <text x="922" y="665" class="part">TC4420CPA</text>
-  <text x="922" y="691" class="small">1+8 VDD: LOAD_5V</text>
+  <text x="922" y="691" class="small">1+8 VDD: SW_5V</text>
   <text x="922" y="714" class="small">4+5 GND: LOAD_GND</text>
   <path d="M855 680 H905 M1110 680 H1155 M1235 680 H1330" class="signal green"/>
   <text x="853" y="620" class="small">GPIO27</text>
@@ -249,7 +346,7 @@
   <circle cx="1280" cy="680" r="3" class="dot"/>
   <text x="1120" y="807" class="small">LOAD_GND</text>
   <text x="870" y="839" class="small">Driver: 100 nF + 1 uF across VDD/GND at its pins.</text>
-  <text x="870" y="861" class="small">Motor bulk: 220 uF (+ to LOAD_5V, - to LOAD_GND), NOT drain.</text>
+  <text x="870" y="861" class="small">Motor bulk: 220 uF (+ to SW_5V, - to LOAD_GND), NOT drain.</text>
   <line x1="40" y1="889" x2="1600" y2="889" class="rule"/>
 
   <text x="40" y="925" class="heading">4. LED level shift and amplifier shutdown isolation</text>
@@ -267,7 +364,7 @@
   <text x="65" y="1130" class="small">10k input-to-GND</text>
   <rect x="675" y="1015" width="60" height="20" fill="white" stroke="#26343c" stroke-width="2"/>
   <text x="673" y="1000" class="small">330 ohm</text>
-  <text x="305" y="955" class="small">Join 10+13+14: LOAD_5V</text>
+  <text x="305" y="955" class="small">Join 10+13+14: SW_5V</text>
   <path d="M440 960 V975" class="supply"/>
   <path d="M440 1145 V1163" class="wire"/>
   <text x="290" y="1185" class="small">Join 1+4+7+9+12: LOAD_GND</text>
@@ -286,7 +383,7 @@
   <text x="800" y="1290" class="small">BCLK</text>
   <text x="800" y="1320" class="small">LRC/WS</text>
   <text x="800" y="1350" class="small">DIN</text>
-  <text x="800" y="1380" class="small">VIN: LOAD_5V</text>
+  <text x="800" y="1380" class="small">VIN: SW_5V</text>
   <text x="800" y="1402" class="small">GND: LOAD_GND</text>
   <path d="M630 1280 H790" class="signal blue"/>
   <path d="M630 1310 H790 M630 1340 H790" class="signal pink"/>

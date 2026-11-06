@@ -10,6 +10,8 @@ constexpr uint8_t MAX_PLAYS = 3;
 constexpr size_t UID_CAPACITY = 15;
 constexpr size_t TRACK_PATH_CAPACITY = 40;
 
+// Switched 5 V rail soft-start and settling before any peripheral is touched; must be below the SD stage.
+constexpr uint32_t PERIPHERAL_SETTLE_MS = 30;
 constexpr uint32_t BOOT_SD_EARLIEST_MS = 200;
 constexpr uint32_t BOOT_NFC_EARLIEST_MS = 400;
 constexpr uint32_t BOOT_READY_EARLIEST_MS = 600;

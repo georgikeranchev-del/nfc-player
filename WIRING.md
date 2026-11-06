@@ -41,6 +41,9 @@ bypassing battery protection or joining raw B- to system GND.
   10k pulldowns at gate-driver input, amp-buffer input and LED-buffer input.
 - **Battery divider:** one 100k and one 47k, both 1% metal-film, 0.25 W;
   one additional 100 nF X7R ceramic, >=16 V, at GPIO34. No KEY transistor is needed.
+- **Peripheral 5 V switch:** one **AO3401A** P-MOSFET (SOT-23; buy 3) on a pre-soldered
+  SOT-23-to-DIP breakout board for the breadboard, one 2N7000, 100k x2, 10k, and a 100 nF
+  X7R. See [Peripheral 5 V switch](#peripheral-5-v-switch).
 - **TPS61088 JXL V1.10 boost module:** verify the actual board's input range,
   output adjustment, current/thermal limits and undervoltage behavior before use.
 - **Cell protection and fuse hardware:** documented protected 1S cell or compatible
@@ -113,10 +116,11 @@ PCM P+ --+---------------------------- IP5306 BAT+ (charger only)
                                 +---- battery divider top (100k)
 PCM P- ------------------------------ IP5306 BAT-, TPS61088 IN-/OUT-, LOAD_GND
 
-TPS61088 OUT+ (set to 5.00 V) --------- LOAD_5V star
+TPS61088 OUT+ (set to 5.00 V) --------- LOAD_5V star (always on while SW_LOAD is closed)
 IP5306 OUT+ and OUT-: no external load connection
 
-LOAD_5V -> ESP32 VIN/5V, amp VIN, ring 5V, motor +, AHCT125 VCC, TC4420 VDD
+LOAD_5V -> ESP32 VIN/5V and Q_PSW source (see "Peripheral 5 V switch" below)
+SW_5V (Q_PSW drain) -> amp VIN, ring 5V, motor +, AHCT125 VCC, TC4420 VDD, SD/PN532 supply
 LOAD_GND -> all module returns, MOSFET source, driver/buffer GND, divider return
 ```
 
@@ -154,6 +158,53 @@ For battery-only development omit the former series rail diode. Route TPS61088
 output straight to the star. Do not put motor/amp current
 through the ESP32 headers, skinny daisy-chain jumpers or long perfboard solder
 tracks. Use short power wires and pair each signal with a nearby return path.
+
+### Peripheral 5 V switch
+
+The ESP32 stays on LOAD_5V so the encoder can wake it; every other load is on SW_5V,
+which GPIO17 (PERIPH_POWER) switches through a high-side P-MOSFET. The firmware
+turns SW_5V on only after the first battery reading is safe, and off just before
+deep sleep. This replaces the old IP5306 OUT-pin switching role.
+
+```text
+LOAD_5V --+------------------------ Q_PSW source (S)
+          +-- 100k (R_PSW_PU) ----- Q_PSW gate (G)
+          +-- 100nF (C_PSW_SS) ---- Q_PSW gate (G)   [gate-to-source]
+Q_PSW gate -- 10k (R_PSW_SS) ------ Q_PSW_DRV (2N7000) drain
+Q_PSW_DRV source -------------------- LOAD_GND
+GPIO17 ------------------------------ Q_PSW_DRV gate; 100k (R_PSW_DRV_PD) gate-to-LOAD_GND
+Q_PSW drain (D) -------------------- SW_5V
+```
+
+- GPIO17 floats in reset and deep sleep; the 100k pulldown keeps the 2N7000 and
+  therefore Q_PSW off. Do not omit it. HIGH turns the rail on.
+- Q_PSW source goes to LOAD_5V and drain to SW_5V. Reversed, its body diode would
+  feed SW_5V from LOAD_5V while the switch is "off".
+- The part is the **AO3401A** (SOT-23, on a pre-soldered SOT-23-to-DIP breakout board
+  for the breadboard): -30 V, about -4 A, <=52 mohm at Vgs -4.5 V, Vgs(th) about
+  -0.5 to -1 V, Vgs(max) +/-12 V. The gate sees about -4.5 V when on. Realistic peak
+  is about 2.5-3 A (motor start, amp, ring at the set brightness), roughly 0.4-0.5 W
+  in the part for short bursts. The SOT-23 pin order is 1 = gate, 2 = source,
+  3 = drain; trust the part's datasheet, not the adapter's numbering. Use short, thick
+  wires for the source/drain path (breadboard contacts are poor at 3 A; solder the
+  power path if it is flaky or warm). Parallel a second AO3401A (gates, sources and
+  drains tied) if it runs warm.
+- IRLML6402 (SOT-23, -20 V, 3.7 A, <=65 mohm at -4.5 V) is a drop-in alternative. Do
+  not use "standard" P-MOSFETs such as IRF4905/IRF9540 or FQP27P06: they are specified
+  at -10 V gate drive and will not turn on fully at -4.5 V. The through-hole parts
+  NDP6020P and SUP75P03-07 are obsolete; SUP90P06-09L (TO-220) works but is oversized
+  and its large gate capacitance slows turn-on.- R_PSW_SS and C_PSW_SS slow turn-on (a few ms) to limit charging current into the
+  470 uF + 220 uF + 100 uF on SW_5V so the boost output does not sag and brown out
+  the ESP32. Check LOAD_5V on a scope at turn-on; enlarge C_PSW_SS if it dips.
+- Keep C_POWER (1000 uF) on LOAD_5V and C_AMP/C_LED/C_MOTOR on SW_5V.
+- While SW_5V is off, SD/PN532/amp/ring/driver draw nothing and the encoder,
+  charger sense and ADC divider keep working from LOAD_5V/3V3/battery.
+- SD and PN532 must take their power from SW_5V (via onboard regulators) or their
+  3V3 must come from a switched source; an ESP32-3V3-fed module would stay on and
+  be back-fed through its signals. The firmware releases the SPI, I2S and LED
+  data pins before cutting SW_5V to avoid back-powering through ESD diodes.
+- Deep sleep still leaves the TPS61088, its quiescent current, the ESP32 DevKit
+  regulator/USB-UART chip and the divider (about 30 uA) connected to the pack.
 
 ### Battery voltage divider
 
@@ -222,8 +273,9 @@ not a hard real-time protection circuit.
 
 Hard low-battery shutdown stops motor/audio/NFC polling, clears LEDs and deep-sleeps
 without button or timer wake. Open SW_LOAD, recharge, then switch on again;
-charging alone does not wake it. **Deep sleep does not disconnect the TPS61088,
-SD, PN532 or other rail loads, and the ADC no longer monitors during sleep.**
+charging alone does not wake it. **Deep sleep switches SW_5V off (SD, PN532, amp,
+LEDs, motor), but does not disconnect the TPS61088, ESP32 or divider, and the ADC
+no longer monitors during sleep.**
 Do not store it in this state. Keep the PCM as independent protection. A proper
 hardware low-voltage disconnect is needed for unattended automatic isolation;
 do not assume the JXL board's UVLO or EN provides that without its schematic and
@@ -405,16 +457,16 @@ GPIO27 -- TC4420 INPUT (pin 2)
              |
             GND
 
-TC4420 pins 1 + 8 (VDD) -> LOAD_5V; pins 4 + 5 (GND) -> LOAD_GND
+TC4420 pins 1 + 8 (VDD) -> SW_5V; pins 4 + 5 (GND) -> LOAD_GND
 100 nF + 1 uF between TC4420 VDD and GND, close to pins
 TC4420 OUTPUT pins 6 + 7 -- one 100 ohm -- IRLZ44N GATE
 IRLZ44N GATE -- 10k ------- IRLZ44N SOURCE -> LOAD_GND
 IRLZ44N DRAIN ------------ MOTOR -
-LOAD_5V ----------------- MOTOR +
+SW_5V -------------------- MOTOR +
 
-Flyback diode: ANODE -> drain/motor -; CATHODE (band) -> motor +/LOAD_5V
+Flyback diode: ANODE -> drain/motor -; CATHODE (band) -> motor +/SW_5V
 100 nF across motor terminals (brush suppression)
-220 uF (>=10 V): + -> LOAD_5V; - -> LOAD_GND, NOT drain/motor -
+220 uF (>=10 V): + -> SW_5V; - -> LOAD_GND, NOT drain/motor -
 ```
 
 ### TC4420CPA DIP-8 pin bridges
@@ -426,7 +478,7 @@ socket links.
 
 | Pin(s) | Connection |
 |---|---|
-| 1 + 8 | Join VDD pins; connect to LOAD_5V. |
+| 1 + 8 | Join VDD pins; connect to SW_5V. |
 | 4 + 5 | Join GND pins; connect to LOAD_GND. |
 | 6 + 7 | Join OUTPUT pins; through one 100 ohm resistor to IRLZ44N gate. |
 | 2 | INPUT from GPIO27, with a 10k resistor to LOAD_GND. |
@@ -458,16 +510,16 @@ COMPONENT SIDE — notch upward; pin numbers are top-view
 
                         TC4420 socket, notch up
                        ┌──────────────────────┐
- LOAD_5V --------------│ 1 VDD         VDD 8 │-------------- LOAD_5V
+ SW_5V ----------------│ 1 VDD         VDD 8 │---------------- SW_5V
  GPIO27 ---------------│ 2 IN           OUT 7│--+
                        │ 3 NC           OUT 6│--+--100 ohm--MOSFET GATE
  LOAD_GND -------------│ 4 GND         GND 5 │-------------- LOAD_GND
                        └──────────────────────┘
  GPIO27 / pin-2 node -- 10k -- LOAD_GND
- 100 nF + 1 uF across the LOAD_5V and LOAD_GND groups, near the socket
+ 100 nF + 1 uF across the SW_5V and LOAD_GND groups, near the socket
 
  MOTOR / POWER EDGE:
- LOAD_5V -> MOTOR +       MOSFET SOURCE -> LOAD_GND
+ SW_5V -> MOTOR +         MOSFET SOURCE -> LOAD_GND
  MOTOR - -> MOSFET DRAIN  10k from MOSFET GATE to SOURCE
  diode across motor terminals, band toward MOTOR +
 ```
@@ -490,17 +542,17 @@ Recommended order:
    LOAD_GND. Fit the single 100 ohm resistor between joined output pins 6/7 and
    the MOSFET gate. Put the other 10k directly between the MOSFET gate and source.
 5. Connect MOSFET source to the LOAD_GND power return and drain to MOTOR -;
-   connect MOTOR + to LOAD_5V. Place the flyback diode across the motor terminals
-   (band toward MOTOR +). Put the 220 uF capacitor across LOAD_5V and LOAD_GND
+   connect MOTOR + to SW_5V. Place the flyback diode across the motor terminals
+   (band toward MOTOR +). Put the 220 uF capacitor across SW_5V and LOAD_GND
    near the motor supply branch, not from drain to ground. The separate 100 nF
    brush-suppression capacitor goes across the motor terminals.
-6. Keep the motor's LOAD_5V and LOAD_GND current path short and adequately rated.
+6. Keep the motor's SW_5V and LOAD_GND current path short and adequately rated.
    Route it directly to the power distribution/terminal points, not through the
    TC4420 socket, GPIO connector, or a long chain of thin perfboard pads. Keep
    GPIO27/input wiring away from the motor and gate wiring; route motor leads
    together.
 7. Before inserting the IC or applying power, inspect for solder bridges and use
-   a meter to check that LOAD_5V is not shorted to LOAD_GND. Verify diode
+   a meter to check that SW_5V and LOAD_5V are not shorted to LOAD_GND. Verify diode
    orientation, MOSFET G/D/S orientation, resistor values, and continuity of
    each pin group against the drawing. Then continue with the staged checks in
    [MANUAL_TESTS.md](MANUAL_TESTS.md#perfboard-assembly-and-acceptance).
@@ -512,7 +564,7 @@ the [TI datasheet, page 3](https://www.ti.com/lit/ds/symlink/sn74ahct125.pdf#pag
 
 | Connection | Pin(s) |
 |---|---|
-| VCC -> LOAD_5V, GND -> LOAD_GND | 14, 7 |
+| VCC -> SW_5V, GND -> LOAD_GND | 14, 7 |
 | Channel 1 /OE -> GND | 1 |
 | GPIO21 -> 1A, 10k from 1A to GND | 2 |
 | 1Y -> 330 ohm -> LED DIN | 3 |
@@ -525,7 +577,7 @@ the [TI datasheet, page 3](https://www.ti.com/lit/ds/symlink/sn74ahct125.pdf#pag
 For this two-channel build, the socket bridge groups are:
 
 - **1, 4, 7, 9, 12 -> LOAD_GND.**
-- **10, 13, 14 -> LOAD_5V.**
+- **10, 13, 14 -> SW_5V.**
 
 Keep these two groups separate. Short links to the same local rail count as
 connections; separate pin-to-pin jumpers are not needed when the rail already
@@ -564,8 +616,8 @@ Encoder breakout VCC -> 3V3 only, if the module needs it
 ```
 
 Disconnect the old GPIO17-to-KEY transistor circuit (at least its 1k base resistor);
-GPIO17 is now unused and is the only free output-capable pin.
-Firmware no longer configures that pin, creates a KEY timer or issues taps.
+GPIO17 now drives the peripheral 5 V switch (see above) and no output-capable pin is free.
+Firmware does not create a KEY timer or issue taps.
 Do not join KEY to GPIO4. The charger's onboard button may remain, but it does
 not control the TPS61088 path or wake an unpowered player. Normal sleep wakes
 with the encoder; low-battery lockout requires recharge and a power cycle.
@@ -586,26 +638,26 @@ free input-only pin. A spare 100 nF ceramic from GPIO39 to GND is optional;
 Espressif documents glitches on GPIO36/39 in some ADC and sleep cases, and the
 40 ms software debounce covers them. This button cannot wake deep sleep.
 
-If the transistor circuit stays on GPIO17 as it was, do not enable that pin as
-an input with a pull-up: the 1k and 10k would hold the base partly on.
+If any part of the old transistor circuit stays on GPIO17, remove it: the
+2N7000 gate and its 100k pulldown must be the only load on that pin.
 
 ## SD, PN532 and decoupling
 
 Use [PINOUT.md](PINOUT.md). PN532 must be set to SPI. Confirm each breakout's allowed
 power voltage and 3.3 V logic levels; a module labelled 5V may have an onboard
 regulator, while a bare SD/PN532 device cannot simply take 5 V. Supply these
-modules only according to their own schematic, not from the general 5 V list.
+modules from SW_5V according to their own schematic, so deep sleep removes power.
 
 | Location | Existing/additional capacitance |
 |---|---|
-| TPS61088 output | Existing 1000 uF + 100 nF only after checking JXL startup/inrush and allowed capacitance |
+| TPS61088 output | Existing 1000 uF + 100 nF on LOAD_5V only after checking JXL startup/inrush and allowed capacitance |
 | Battery ADC node | 100 nF to LOAD_GND, close to GPIO34; not a 5 V supply bypass |
 | ESP32 VIN | Existing board capacitors + local 100 nF; extra 470 uF only as a measured trial |
-| MAX98357A VIN | 100 uF + 100 nF |
-| LED ring | 470 uF + 100 nF |
-| Motor rail | 220 uF to GND, 100 nF across motor brushes |
-| AHCT125 | 100 nF ceramic |
-| TC4420 | 100 nF + 1 uF ceramic |
+| MAX98357A VIN | 100 uF + 100 nF (SW_5V) |
+| LED ring | 470 uF + 100 nF (SW_5V) |
+| Motor rail | 220 uF to GND, 100 nF across motor brushes (SW_5V) |
+| AHCT125 | 100 nF ceramic (SW_5V) |
+| TC4420 | 100 nF + 1 uF ceramic (SW_5V) |
 
 Electrolytics on 5 V: >=10 V rating, correct polarity. Yellow plastic box caps
 are often film; read markings rather than assume. Short-leaded ceramics belong

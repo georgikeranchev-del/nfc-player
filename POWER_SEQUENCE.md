@@ -3,13 +3,15 @@
 ## Start and wake paths
 
 **Load switch open:** close SW_LOAD to power TPS61088 and the battery divider
-from protected P+. A stable 5 V rail cold-boots the ESP32. The IP5306 is charger
-only; its OUT pins and KEY are not in the player power/wake path. Capacitor/boost
-startup and the ESP32 ROM occur BEFORE the timing below.
+from protected P+. A stable 5 V rail cold-boots the ESP32 (on LOAD_5V); the
+peripheral rail SW_5V is still off. The IP5306 is charger only; its OUT pins and
+KEY are not in the player power/wake path. Capacitor/boost startup and the ESP32
+ROM occur BEFORE the timing below.
 
 **5 V and 3.3 V still valid, ESP32 in deep sleep:** press encoder SW on GPIO4 to
 GND. EXT0 wakes/reset-starts the ESP32; `setup()` and all boot stages run again.
-This wake is allowed only after normal user/idle sleep.
+SW_5V is switched on again only after a safe battery reading. This wake is allowed
+only after normal user/idle sleep.
 
 **Low-battery sleep:** button and timer wake are disabled. Open SW_LOAD, recharge,
 then switch on again. Charging alone does not wake the ESP32. Hard low-battery
@@ -24,15 +26,17 @@ Each peripheral stage runs once; actual library calls can exceed these offsets.
 
 | Earliest time | Stage | Loads |
 |---|---|---|
-| 0 ms onward | Safe motor/amp outputs, reset log, ADC setup and 20 ms settling, initial voltage sample, encoder init, LED black, PWM zero | Unsafe voltage enters low-battery sleep before SD/NFC/audio initialization |
+| 0 ms onward | Safe motor/amp outputs, PERIPH_POWER LOW, reset log, ADC setup and 20 ms settling, initial voltage sample | Peripheral rail still off |
+| After a safe sample | Switch SW_5V on (GPIO17 HIGH) and wait 30 ms; encoder init, LED black, PWM zero | Unsafe voltage enters low-battery sleep with SW_5V never turned on |
 | 200 ms | Initialize SD on HSPI, check/create track directory | Motor/amp still off |
 | 400 ms | Initialize PN532, configure finite retries, start reader task | Motor/amp still off |
 | 600 ms | Allocate/configure audio output silently; ready/standby LEDs | No I2S playback until tag |
 
 POWER and GPIO outputs get initialized at entry, before the SD/NFC delays.
-These are not switched supply rails: PN532/SD/amp/LED electronics already have
-power as soon as LOAD_5V appears. LEDs are cleared early to avoid keeping a prior
-latched bright pattern through an ESP32-only reset.
+PN532/SD/amp/LED electronics are powered from SW_5V, which GPIO17 turns on right
+after the first safe battery reading; the 30 ms settle precedes any peripheral
+access, and the gate network softens the inrush. LEDs are cleared early; a reset
+drops SW_5V (GPIO17 pulldown), so the ring also restarts dark.
 
 There are no startup or keep-alive KEY taps. GPIO17 is unused. ADC1 GPIO34 is
 sampled every 250 ms (16 readings averaged); calibrated pack voltage is logged
@@ -87,9 +91,11 @@ before the 2 s timeout cancels that pending low-voltage event. Once sleeping,
 voltage rebound cannot restart playback. Low-battery shutdown does not wait for
 the encoder to be released and does not enable its wake source.
 
-NFC polling stop is not PN532 power-down; TPS61088, SD, PN532, ring idle logic,
-buffers, regulator and gate driver can still draw current. ADC monitoring stops
-in deep sleep. **Sleep is not a battery disconnect.** Measure sleep current,
+NFC polling stop is not PN532 power-down by itself: the controller then releases
+the SPI/I2S/LED pins and drives GPIO17 LOW, cutting SW_5V so SD, PN532, amp, LEDs and
+motor driver draw nothing. TPS61088, the ESP32 board and the divider still draw
+current. ADC monitoring stops in deep sleep. **Sleep is not a battery disconnect.**
+Measure sleep current,
 open SW_LOAD for storage/recharge, and retain suitable PCM protection. A hardware
 low-voltage disconnect would be needed for autonomous isolation. Cooperative
 sampling can be delayed by library calls and does not replace that protection.

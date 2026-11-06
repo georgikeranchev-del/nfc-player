@@ -15,6 +15,12 @@ R_VBUS_PD,1,100k ohm resistor,bought,2N7000 gate to LOAD_GND
 R_VBUS_PULLUP,1,100k ohm resistor,bought,GPIO35 drain node to ESP32 3V3 only; GPIO35 has no internal pull
 SW_HELP,1,Momentary normally-open button (existing KEY button),bought,One lead to GPIO39 and the other to LOAD_GND; disconnect it from IP5306 KEY
 R_HELP_PULLUP,1,10k ohm resistor,bought,GPIO39 to ESP32 3V3 only; GPIO39 is input only with no internal pull
+Q_PSW,1,AO3401A P-channel MOSFET SOT-23 on a pre-soldered SOT-23-to-DIP breakout board (-30V -4A; 52 mohm max at Vgs -4.5V; Vgs(th) -0.5 to -1V),to buy,Source to LOAD_5V and drain to SW_5V; SOT-23 pins are 1=G 2=S 3=D (check the adapter labels); buy 3 (spares); IRLML6402 is a drop-in alternative; optional second AO3401A in parallel if it runs warm at peak load
+Q_PSW_DRV,1,2N7000 TO-92 N-MOSFET,bought,GPIO17 drives its gate; drain through R_PSW_SS to Q_PSW gate; source to LOAD_GND; check pin order
+R_PSW_PU,1,100k ohm resistor,bought,Q_PSW gate to source (LOAD_5V) so the switch is off by default
+R_PSW_SS,1,10k ohm resistor,bought,Q_PSW_DRV drain to Q_PSW gate; with C_PSW_SS slows turn-on to limit inrush
+C_PSW_SS,1,100nF X7R ceramic >=16V,bought,Q_PSW gate to source; soft-start; tune on a scope
+R_PSW_DRV_PD,1,100k ohm resistor,bought,GPIO17/Q_PSW_DRV gate to LOAD_GND so the rail is off in reset and deep sleep
 U_SD,1,SD breakout and card,bought,Confirm module supply voltage and 3.3V SPI signals
 U_NFC,1,PN532 SPI breakout,bought,Verify power/logic requirements and SPI mode
 U_AMP,1,MAX98357A seven-pin module,bought,SD via AHCT buffer; no speaker terminal to ground

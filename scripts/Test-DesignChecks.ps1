@@ -31,7 +31,7 @@ try {
                 $expected = 'Unsupported'
             }
             'adc-pin' {
-                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 17;')
+                $text = (Get-Content $pinsPath -Raw).Replace('BATTERY_ADC = 34;', 'BATTERY_ADC = 0;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Battery divider requires ADC1 GPIO34'
             }
@@ -41,7 +41,7 @@ try {
                 $expected = 'Input-only GPIO34'
             }
             'charger-pin' {
-                $text = (Get-Content $pinsPath -Raw).Replace('CHARGER_PRESENT = 35;', 'CHARGER_PRESENT = 17;')
+                $text = (Get-Content $pinsPath -Raw).Replace('CHARGER_PRESENT = 35;', 'CHARGER_PRESENT = 0;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Charger sense requires RTC input GPIO35'
             }
@@ -51,7 +51,7 @@ try {
                 $expected = 'Input-only GPIO35'
             }
             'help-pin' {
-                $text = (Get-Content $pinsPath -Raw).Replace('HELP_BUTTON = 39;', 'HELP_BUTTON = 17;')
+                $text = (Get-Content $pinsPath -Raw).Replace('HELP_BUTTON = 39;', 'HELP_BUTTON = 0;')
                 [IO.File]::WriteAllText($pinsPath, $text)
                 $expected = 'Help button requires input-only GPIO39'
             }

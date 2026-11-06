@@ -4,8 +4,9 @@ This is the single GPIO connection table for the current battery-only build.
 GPIO numbers are ESP32 signal names, NOT physical header positions; clone-board
 layouts vary. Classic ESP32/WROOM without PSRAM remains the working assumption,
 not a verified module identity. GPIO16 must be available, not used by PSRAM.
-GPIO17 is now unused; remove the previous IP5306 KEY-driver connection.
-GPIO17 is the only free output-capable pin; GPIO36 is the other free input-only pin.
+GPIO17 now drives the peripheral 5 V switch (PERIPH_POWER); remove any previous
+IP5306 KEY-driver connection from it. GPIO36 is the only free input-only pin and
+no output-capable pin remains free.
 
 The symbol, GPIO and component columns are checked against
 [firmware/nfc_player/pins.h](firmware/nfc_player/pins.h) and
@@ -17,12 +18,13 @@ Component IDs correspond to [BOM.csv](BOM.csv).
 | Symbol | GPIO | Component | Wire color | Connection and conditions |
 |---|---|---|---|---|
 | AMP_ENABLE | 2 | U_BUFFER | Green | SN74AHCT125N 2A, pin 5, with 10k to GND; 2Y, pin 6, goes to amplifier SD/SD_MODE. Never connect GPIO2 directly to amplifier SD. Boot-strap review required. |
-| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes normal powered sleep (retaining soft song inhibition), not hard low-battery sleep or a switched-off supply. |
+| ENCODER_SW | 4 | ENC1 | Green | Encoder push switch to GND; active LOW. Wakes normal sleep (retaining soft song inhibition), not hard low-battery sleep. The ESP32 and its 3V3 stay powered, so this wake works while SW_5V is off. |
 | PN532_SS | 5 | U_NFC | White | PN532 SS/SSEL; set the module to SPI. Verify reset-state module pulls on this boot-strap pin. |
 | SD_CS | 13 | U_SD | White | SD module CS. |
 | SD_SCK | 14 | U_SD | Blue | SD module SCK/CLK. |
 | SD_MOSI | 15 | U_SD | Yellow | SD module MOSI/DI. Verify reset-state pulls on this boot-strap pin. |
 | SD_MISO | 16 | U_SD | Brown | SD module MISO/DO; GPIO16 must not be occupied by PSRAM. |
+| PERIPH_POWER | 17 | Q_PSW_DRV | Green | 2N7000 gate, with 100k to LOAD_GND; HIGH switches the SW_5V rail on through the P-MOSFET, LOW/reset/deep sleep leaves it off. GPIO16/17 must not be occupied by PSRAM. |
 | PN532_SCK | 18 | U_NFC | Blue | PN532 SCK. |
 | PN532_MISO | 19 | U_NFC | Brown | PN532 MISO. |
 | LED_DATA | 21 | U_BUFFER | White | SN74AHCT125N 1A, pin 2, with 10k to GND; 1Y, pin 3, through 330 ohm to ring DIN. |
@@ -67,14 +69,18 @@ It is a drawing aid, not proof of clone-board internals or an ERC-checked netlis
   PCM P+ --+------------------> IP5306 BAT+ (charger only; OUT unused)
            +-- SW_LOAD --> SW_BAT+ --> TPS61088 IN+
   PCM P- ---------------------> IP5306 BAT-, TPS61088 IN-/OUT-, LOAD_GND
-  TPS61088 OUT+ (5.00 V) ------> LOAD_5V
+  TPS61088 OUT+ (5.00 V) ------> LOAD_5V (always on while SW_LOAD is closed)
   SW_BAT+ -- 100k --+----------> GPIO34 / ADC1_CH6
                    +-- 47k ---> LOAD_GND
                    +-- 100nF -> LOAD_GND
 
 LOAD_5V --+--> ESP32 VIN/5V
-          +--> amplifier VIN, ring 5V, AHCT125 VCC, TC4420 VDD
-          +--> motor +
+          +--> Q_PSW source (P-MOSFET); gate --100k--> source; gate <--10k-- 2N7000 drain
+          |                              gate --100nF--> source (soft start)
+          |      2N7000: gate <-- GPIO17 (100k to LOAD_GND); source --> LOAD_GND
+          +--> Q_PSW drain = SW_5V
+SW_5V --+--> amplifier VIN, ring 5V, AHCT125 VCC, TC4420 VDD
+        +--> motor +, SD and PN532 supply (if from their onboard 5 V regulators)
 motor - ------> IRLZ44N drain; source --> LOAD_GND
 flyback diode: anode --> motor -; band/cathode --> motor +
 
@@ -82,19 +88,22 @@ GPIO27 --> TC4420 pin 2; joined pins 6/7 --> 100 ohm --> IRLZ44N gate
 GPIO21 --> AHCT125 channel 1 --> 330 ohm --> ring DIN
 GPIO2  --> AHCT125 channel 2 -------------> amplifier SD
 GPIO4  --> encoder push switch --> LOAD_GND
+GPIO17 --> 2N7000 gate (peripheral 5 V switch)
 
 LOAD_GND --> module grounds, buffer/driver grounds, divider return
 ESP32 3V3 --> encoder breakout VCC, only if it needs power
 ```
 
-- SD and PN532 supply voltages depend on the actual breakout schematic; they are
-  deliberately absent from the blanket 5 V list. Their SPI signals must be 3.3 V
-  compatible. Do not drive any unpowered module through its GPIO connections.
+- SD and PN532 must be supplied from SW_5V (through their onboard regulators, after
+  confirming the breakout schematic) so deep sleep removes their power; a module fed
+  from ESP32 3V3 would stay on. Their SPI signals must be 3.3 V compatible. The
+  firmware releases those pins before cutting SW_5V, but do not drive any unpowered
+  module through its GPIO connections.
 - SN74AHCT125N DIP-14: join pins 1, 4, 7, 9, 12 to LOAD_GND; join pins 10, 13, 14
-  to LOAD_5V. Outputs 8 and 11 each stay open. Never join separate outputs 3, 6,
+  to SW_5V. Outputs 8 and 11 each stay open. Never join separate outputs 3, 6,
   8 or 11 together. Inputs 2 and 5 keep separate 10k pulldowns, not direct ground
   bridges. Add 100 nF between pins 14/7. Use AHCT, not plain HC.
-- TC4420CPA DIP-8: join VDD pins 1/8 to LOAD_5V; join GND pins 4/5 to LOAD_GND;
+- TC4420CPA DIP-8: join VDD pins 1/8 to SW_5V; join GND pins 4/5 to LOAD_GND;
   join OUTPUT pins 6/7 before the single 100 ohm gate resistor. INPUT is pin 2;
   pin 3 is NC and stays open. All three duplicate pairs must be connected
   externally. Add 100 nF plus 1 uF local bypass across the VDD/GND groups. Gate,
@@ -103,6 +112,9 @@ ESP32 3V3 --> encoder breakout VCC, only if it needs power
 - Amplifier SD must not be hard-strapped to VIN. GAIN is separate; both speaker
   wires go to amplifier outputs, neither to ground. See the breakout checks in
   [WIRING.md](WIRING.md#dip-ahct125-led-and-amplifier).
+- The ESP32 VIN stays on LOAD_5V so it can wake from the encoder; everything else
+  hangs on SW_5V behind Q_PSW. Orient Q_PSW with its source on LOAD_5V so the body
+  diode cannot feed SW_5V while off. See [WIRING.md](WIRING.md#peripheral-5-v-switch).
 - The load switch must remove power from BOTH the boost input and divider top.
   Do not leave a battery-powered divider driving an unpowered ESP32. Keep the
   ADC return on protected P-/LOAD_GND, never raw B-. See the

@@ -16,7 +16,7 @@ RTC_DATA_ATTR bool playbackInhibited = false;
 }
 
 bool PowerControl::begin() {
-  for (uint8_t pin : {Pins::MOTOR_GATE, Pins::AMP_ENABLE}) {
+  for (uint8_t pin : {Pins::PERIPH_POWER, Pins::MOTOR_GATE, Pins::AMP_ENABLE}) {
     digitalWrite(pin, LOW);
     pinMode(pin, OUTPUT);
   }
@@ -33,6 +33,12 @@ bool PowerControl::begin() {
   sampledAt_ = loggedAt_ = millis();
   logBattery();
   return true;
+}
+
+void PowerControl::enablePeripherals() {
+  digitalWrite(Pins::PERIPH_POWER, HIGH);
+  delay(Config::PERIPHERAL_SETTLE_MS);
+  Serial.println("Peripheral 5 V rail on");
 }
 
 void PowerControl::sampleInputs() {
@@ -92,7 +98,15 @@ void PowerControl::sleep(bool allowButtonWake, bool allowChargerWake) {
   } else {
     Serial.println("Battery voltage unsafe; recharge and power-cycle. Button wake disabled.");
   }
-  Serial.println("Deep sleep; peripheral power is not disconnected");
+  Serial.println("Deep sleep; peripheral 5 V rail off");
   Serial.flush();
+  // Release signal pins first so no GPIO back-powers a module through its ESD diodes as the rail decays.
+  for (uint8_t pin : {Pins::SD_CS, Pins::SD_SCK, Pins::SD_MISO, Pins::SD_MOSI, Pins::PN532_SS,
+                      Pins::PN532_SCK, Pins::PN532_MISO, Pins::PN532_MOSI, Pins::I2S_LRC,
+                      Pins::I2S_BCLK, Pins::I2S_DOUT, Pins::LED_DATA}) {
+    pinMode(pin, INPUT);
+  }
+  digitalWrite(Pins::MOTOR_GATE, LOW);
+  digitalWrite(Pins::PERIPH_POWER, LOW);
   esp_deep_sleep_start();
 }
