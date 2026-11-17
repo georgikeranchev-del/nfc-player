@@ -65,8 +65,18 @@ If a tag is already on the reader, nominal first audio can be around 1.2 s after
 `setup()`, with full volume around 2.2 s, plus any SD/PN532/decoder delays. NFC
 scan latency is additional. Measure before promising a strict two-second start.
 No tag means idle: neither motor nor audio runs at boot. Removing the tag during
-the ramp cancels it; changing tag replaces it. Three plays are followed by idle,
-and re-presenting the tag is required to start again. Replays also ramp/fade.
+a first-start ramp cancels it; changing tag replaces it. Three plays are followed
+by idle, and re-presenting the tag is required to start again. Replays also
+ramp/fade.
+
+Removing the tag while a song plays stops the motor, mutes the amp and pauses the
+decoder (the LEDs fade to standby). The same tag within `TAG_RESUME_MS` (5 s)
+ramps the motor again and, once it is ready, continues from the same point with
+the normal 1 s fade-in. Lifting the tag during that resume ramp pauses again and
+restarts the 5 s window. When the window ends, or a different tag arrives, the
+paused song is dropped and the next presentation starts it from the beginning.
+The window is counted from the reader's "tag gone" report, which comes two missed
+scans (150 ms apart) after the physical lift.
 
 If voltage stays below 3.50 V for 5 s, the controller stops any song/ramp,
 turns LEDs off and latches song inhibition while leaving NFC available. Automatic

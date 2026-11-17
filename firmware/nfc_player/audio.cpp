@@ -27,7 +27,7 @@ bool AudioPlayer::play(const char *path, uint8_t volume) {
 
 void AudioPlayer::applyGain(uint32_t now) {
   if (output_ == nullptr) return;
-  if (!running_) { output_->SetGain(0.0f); return; }
+  if (!running_ || paused_) { output_->SetGain(0.0f); return; }
   uint32_t elapsed = now - fadeAt_;
   float fade = elapsed >= Config::AUDIO_FADE_MS ? 1.0f : static_cast<float>(elapsed) / Config::AUDIO_FADE_MS;
   float level = static_cast<float>(volume_) / Config::VOLUME_SCALE;
@@ -43,9 +43,25 @@ bool AudioPlayer::tick(uint32_t now) {
   return true;
 }
 
+void AudioPlayer::pause() {
+  if (!running_) return;
+  paused_ = true;
+  if (output_ != nullptr) output_->SetGain(0.0f);
+  digitalWrite(Pins::AMP_ENABLE, LOW);
+}
+
+bool AudioPlayer::resume() {
+  if (!running_ || decoder_ == nullptr || !decoder_->isRunning()) return false;
+  paused_ = false;
+  fadeAt_ = millis();
+  digitalWrite(Pins::AMP_ENABLE, HIGH);
+  return true;
+}
+
 void AudioPlayer::stop() {
   digitalWrite(Pins::AMP_ENABLE, LOW);
   running_ = false;
+  paused_ = false;
   if (output_ != nullptr) output_->SetGain(0.0f);
   if (decoder_ != nullptr) {
     if (decoder_->isRunning()) decoder_->stop();

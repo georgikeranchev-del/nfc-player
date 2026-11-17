@@ -44,18 +44,20 @@ struct FakeLeds : ILeds {
   void tick(uint32_t) override {}
 };
 struct FakeAudio : IAudio {
-  bool ok = true, playOK = true, active = false, continues = true;
+  bool ok = true, playOK = true, resumeOK = true, active = false, paused = false, continues = true;
   int initialized = 0, starts = 0;
   uint8_t level = 0;
   char path[Config::TRACK_PATH_CAPACITY] = {};
   bool begin() override { ++initialized; return ok; }
   bool play(const char *value, uint8_t volume) override {
     std::strncpy(path, value, sizeof(path) - 1);
-    level = volume; ++starts; active = playOK; return playOK;
+    level = volume; ++starts; active = playOK; paused = false; return playOK;
   }
-  bool tick(uint32_t) override { return continues; }
+  void pause() override { paused = active; }
+  bool resume() override { if (!active || !resumeOK) return false; paused = false; return true; }
+  bool tick(uint32_t) override { return continues && !paused; }
   void volume(uint8_t value) override { level = value; }
-  void stop() override { active = false; }
+  void stop() override { active = false; paused = false; }
 };
 struct FakeNfc : INfc {
   bool ok = true, pending = false, stopped = false;
@@ -178,6 +180,54 @@ int main() {
       require(std::strcmp(rig.storage.path, "/player/B2.mp3") == 0, "new tag replaces track");
       rig.step(Config::MOTOR_RAMP_MS);
       require(rig.audio.starts == 1, "only latest track plays");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      rig.step(1000); rig.tag("");
+      require(rig.player.state() == PlayerState::TagPaused && rig.audio.active && rig.audio.paused &&
+          rig.pwm.duty == 0, "tag removal pauses audio and stops the motor");
+      rig.step(Config::TAG_RESUME_MS - 1);
+      rig.tag("A1");
+      require(rig.player.state() == PlayerState::MotorRamp && rig.audio.paused && rig.audio.starts == 1,
+          "same tag within five seconds resumes after motor ramp");
+      rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Playing && rig.audio.active && !rig.audio.paused &&
+          rig.audio.starts == 1, "resume continues the existing decoder");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS); rig.tag("");
+      rig.step(Config::TAG_RESUME_MS + 1);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active,
+          "paused audio is stopped after the five-second window");
+      rig.tag("A1");
+      require(rig.player.state() == PlayerState::MotorRamp && rig.audio.starts == 1,
+          "same tag after timeout begins a fresh motor ramp");
+      rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Playing && rig.audio.starts == 2,
+          "same tag after timeout starts from the beginning");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS); rig.tag("");
+      rig.tag("B2");
+      require(rig.player.state() == PlayerState::MotorRamp && !rig.audio.active &&
+          std::strcmp(rig.storage.path, "/player/B2.mp3") == 0, "different tag replaces paused song");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS); rig.tag("");
+      rig.tag("A1"); rig.audio.resumeOK = false; rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Idle && !rig.audio.active && rig.pwm.duty == 0 &&
+          std::strstr(rig.player.error(), "resume failed") != nullptr,
+          "failed audio resume stops safely and reports an error");
+    }
+    {
+      Rig rig; rig.boot(); rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS); rig.tag("");
+      rig.tag("A1"); rig.step(100); rig.tag("");
+      require(rig.player.state() == PlayerState::TagPaused && rig.audio.active && rig.audio.paused &&
+          rig.pwm.duty == 0, "tag lifted during the resume ramp pauses again instead of discarding the song");
+      rig.step(Config::TAG_RESUME_MS - 1);
+      rig.tag("A1"); rig.step(Config::MOTOR_RAMP_MS);
+      require(rig.player.state() == PlayerState::Playing && !rig.audio.paused && rig.audio.starts == 1,
+          "five-second window restarts at the second lift and still resumes the same song");
     }
     {
       Rig rig; rig.boot(); rig.storage.found = false; rig.tag("A1");

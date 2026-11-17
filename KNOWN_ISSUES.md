@@ -18,6 +18,7 @@
 | Boot timing | Stages are minimum offsets; SD/PN532 and decoder calls can block. Two seconds is not a guaranteed deadline. |
 | 3.x support | PWM wrapper has both APIs; reference full stack is core 2.0.17. Don't infer full 3.x audio compatibility. |
 | NFC presence queue | Rapid transitions can coalesce; a remove/re-present entirely between consumption can be missed. Reader detection/retries need bench checks. |
+| Tag pause/resume | Lifting a playing tag pauses the decoder (motor off, amp muted); the same tag within `TAG_RESUME_MS` (5 s) resumes it after the motor ramp, and a lift during that ramp pauses again with a fresh window. Native tests use a fake audio port only. Not bench-verified: amp pop on pause/resume, MP3 continuity after up to 5 s without decoder calls, and the real window, which starts when the reader reports the tag gone (estimated 0.2-0.4 s after the lift). See B12. |
 | MP3 errors | Decoder false means finished/error; bounded replay can repeat a corrupt track up to MAX_PLAYS. Fix bad files, not endless retries. |
 | UID size | Supports up to 7 UID bytes/14 hex chars, preserving original behavior; 10-byte UIDs rejected. |
 | Encoder fast turns | Polling can miss fast detents during library calls. No quadrature ISR decoder added without a demonstrated need. |

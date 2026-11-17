@@ -68,8 +68,12 @@ motor ramp algorithm run in tests without Arduino.
 
 MP3 files belong at `/player/<UPPERCASE_UID>.mp3` on the SD card. Default behavior:
 three plays, 600 ms motor ramp, 1 s audio fade, 5-minute idle sleep, 1.5 s encoder
-hold then release to sleep. A held wake button must first be released to arm a
-new long press. Brownout protection is NOT disabled.
+hold then release to sleep. Lifting a playing song's tag pauses the audio and
+stops the motor; presenting the same tag within 5 seconds resumes from that point
+after the motor ramps up. Lifting it again during that ramp-up pauses again and
+restarts the 5 seconds. After 5 seconds, playback is stopped and a later
+presentation starts the song over. A held wake button must first be released to
+arm a new long press. Brownout protection is NOT disabled.
 
 A short press of the help button (GPIO39) while idle plays `/player/help.mp3`
 at the current volume, for at most 2 minutes, with the motor off. Press again to

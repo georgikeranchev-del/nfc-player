@@ -39,6 +39,8 @@ struct IAudio {
   virtual ~IAudio() = default;
   virtual bool begin() = 0;
   virtual bool play(const char *path, uint8_t volume) = 0;
+  virtual void pause() = 0;
+  virtual bool resume() = 0;
   virtual bool tick(uint32_t now) = 0;
   virtual void volume(uint8_t value) = 0;
   virtual void stop() = 0;
