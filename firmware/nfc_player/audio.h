@@ -9,6 +9,8 @@ class AudioPlayer : public IAudio {
 public:
   bool begin() override;
   bool play(const char *path, uint8_t volume) override;
+  void pause() override;
+  bool resume() override;
   bool tick(uint32_t now) override;
   void volume(uint8_t value) override;
   void stop() override;
@@ -20,5 +22,5 @@ private:
   AudioGeneratorMP3 *decoder_ = nullptr;
   uint32_t fadeAt_ = 0;
   uint8_t volume_ = Config::INITIAL_VOLUME;
-  bool running_ = false;
+  bool running_ = false, paused_ = false;
 };

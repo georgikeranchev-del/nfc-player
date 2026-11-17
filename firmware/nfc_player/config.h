@@ -18,6 +18,7 @@ constexpr uint32_t BOOT_READY_EARLIEST_MS = 600;
 constexpr uint32_t IDLE_SLEEP_MS = 5UL * 60UL * 1000UL;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint32_t BUTTON_HOLD_MS = 1500;
+constexpr uint32_t TAG_RESUME_MS = 5000;
 constexpr uint32_t ENCODER_DEBOUNCE_MS = 2;
 
 constexpr uint32_t BATTERY_DIVIDER_TOP_OHMS = 100000;
@@ -93,6 +94,7 @@ static_assert(BATTERY_SOFT_HOLD_MS >= BATTERY_SAMPLE_MS && LOW_BATTERY_MAX_MS > 
               LOW_BATTERY_VOLUME > 0 && LOW_BATTERY_VOLUME <= MAX_VOLUME,
               "Invalid low-battery warning settings");
 static_assert(HELP_MAX_MS > AUDIO_FADE_MS && HELP_MAX_MS < IDLE_SLEEP_MS, "Invalid help playback limit");
+static_assert(TAG_RESUME_MS > 0, "Tag resume window must be positive");
 static_assert(MIN_VOLUME <= INITIAL_VOLUME && INITIAL_VOLUME <= MAX_VOLUME && MAX_VOLUME > 0,
               "Invalid volume settings");
 static_assert(MAX_VOLUME <= VOLUME_SCALE && VOLUME_SCALE > 0,

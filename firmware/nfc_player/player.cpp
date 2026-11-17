@@ -30,6 +30,8 @@ void Player::stopTrack(uint32_t now, LedMode mode) {
   Motor.stop();
   Audio.stop();
   Leds.mode(mode, now);
+  resumePending_ = false;
+  pausedUid_[0] = '\0';
 }
 
 void Player::fail(const char *message, uint32_t now) {
@@ -92,7 +94,8 @@ void Player::checkPlaybackBattery(uint32_t now) {
   Power.inhibitPlayback(true);
   softBatteryPending_ = false;
   error_ = "Low battery; songs inhibited";
-  if (state_ == PlayerState::MotorRamp || state_ == PlayerState::Playing || state_ == PlayerState::Help) {
+  if (state_ == PlayerState::MotorRamp || state_ == PlayerState::Playing ||
+      state_ == PlayerState::TagPaused || state_ == PlayerState::Help) {
     stopTrack(now, LedMode::Off);
     state_ = PlayerState::Idle;
     lastActivity_ = now;
@@ -236,29 +239,56 @@ void Player::tick(uint32_t now) {
     tag.uid[sizeof(tag.uid) - 1] = '\0';
     lastActivity_ = now;
     if (strcmp(uid_, tag.uid) != 0) {
+      // A resume ramp still holds the paused song, so a lift then pauses again; a first-start ramp has nothing to keep.
+      bool pausable = state_ == PlayerState::Playing || (state_ == PlayerState::MotorRamp && resumePending_);
+      if (tag.uid[0] == '\0' && pausable) memcpy(pausedUid_, uid_, sizeof(pausedUid_));
+      bool resumeTag = tag.uid[0] != '\0' && state_ == PlayerState::TagPaused &&
+          strcmp(pausedUid_, tag.uid) == 0 && now - tagPausedAt_ <= Config::TAG_RESUME_MS;
       memcpy(uid_, tag.uid, sizeof(uid_));
       error_ = "";
       if (uid_[0] == '\0') {
-        if (state_ != PlayerState::BatteryWarning && state_ != PlayerState::Help) {
+        if (pausable) {
+          Audio.pause();
+          Motor.stop();
+          Leds.mode(LedMode::Stopping, now);
+          tagPausedAt_ = now;
+          resumePending_ = false;
+          state_ = PlayerState::TagPaused;
+        } else if (state_ != PlayerState::BatteryWarning && state_ != PlayerState::Help) {
           stopTrack(now, Power.playbackInhibited() ? LedMode::Off : LedMode::Stopping);
           state_ = PlayerState::Idle;
         }
       } else {
-        snprintf(path_, sizeof(path_), "%s/%s.mp3", Config::TRACK_DIRECTORY, uid_);
-        plays_ = 0;
-        Leds.selectPattern();
-        startTrack(now, true);
+        if (resumeTag) {
+          Motor.start(now);
+          Leds.mode(LedMode::Off, now);
+          resumePending_ = true;
+          state_ = PlayerState::MotorRamp;
+          pausedUid_[0] = '\0';
+        } else {
+          snprintf(path_, sizeof(path_), "%s/%s.mp3", Config::TRACK_DIRECTORY, uid_);
+          plays_ = 0;
+          Leds.selectPattern();
+          startTrack(now, true);
+        }
       }
     }
+  }
+
+  if (state_ == PlayerState::TagPaused && now - tagPausedAt_ > Config::TAG_RESUME_MS) {
+    stopTrack(now, Power.playbackInhibited() ? LedMode::Off : LedMode::Standby);
+    state_ = PlayerState::Idle;
   }
 
   if (state_ == PlayerState::MotorRamp) {
     lastActivity_ = now;
     Motor.tick(now);
     if (Motor.ready()) {
-      if (!Audio.play(path_, volume_)) {
+      bool audioStarted = resumePending_ ? Audio.resume() : Audio.play(path_, volume_);
+      resumePending_ = false;
+      if (!audioStarted) {
         stopTrack(now, LedMode::Standby);
-        error_ = "MP3 start failed; remove and re-present tag to retry";
+        error_ = "MP3 start or resume failed; remove and re-present tag to retry";
         state_ = PlayerState::Idle;
       } else {
         Leds.mode(LedMode::Starting, now);
